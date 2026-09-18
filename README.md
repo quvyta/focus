@@ -36,9 +36,17 @@ family's themes, icons, keys and mouse behaviour.
 ## Install
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/quvyta/quvyta/main/install.sh | sh -s -- focus
+```
+
+Or with Cargo:
+
+```sh
 cargo install quvyta-focus
 qfocus
 ```
+
+If the shell cannot find `qfocus`, add `~/.cargo/bin` to your `PATH` (fish: `fish_add_path ~/.cargo/bin`).
 
 The program is installed as `qfocus` and also as `quvyta-focus`. Rust 1.95 or later is required.
 
