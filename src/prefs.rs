@@ -13,9 +13,10 @@
 use std::time::Duration;
 
 use qframe::date::{TimeOfDay, Weekday};
-use qframe::storage::{Schema, Settings};
+use qframe::storage::{Schema, SettingKind, Settings};
 
-/// The key of the day a week starts on: a weekday name in English, `monday` by default.
+/// The key of the day a week starts on: a weekday name in English. Without it the week starts
+/// where the language's calendar starts it.
 pub const WEEK_START: &str = "week-start";
 /// The key of the hour the day turns at: `hh:mm`, midnight by default.
 pub const DAY_ROLLOVER: &str = "day-rollover";
@@ -55,8 +56,9 @@ const GOAL_MOST: i64 = u32::MAX as i64;
 /// The preferences of the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prefs {
-    /// The day a week starts on, for the week windows of goals and charts.
-    pub week_start: Weekday,
+    /// The day a week starts on, for the week windows of goals and charts, when one was chosen;
+    /// `None` follows the active language, as the framework's calendar does.
+    pub week_start: Option<Weekday>,
     /// The hour the day turns at; sessions before it belong to the day before.
     pub rollover: TimeOfDay,
     /// How long the terminal may go without input before the work is idle.
@@ -70,10 +72,10 @@ pub struct Prefs {
 }
 
 impl Default for Prefs {
-    /// Monday, midnight, fifteen minutes, twelve hours, no stopping, one hour.
+    /// The language's week, midnight, fifteen minutes, twelve hours, no stopping, one hour.
     fn default() -> Self {
         Self {
-            week_start: Weekday::Monday,
+            week_start: None,
             rollover: TimeOfDay::default(),
             idle_after: Duration::from_secs(15 * 60),
             ceiling: 12 * 3_600,
@@ -84,13 +86,21 @@ impl Default for Prefs {
 }
 
 impl Prefs {
+    /// The day the week starts on: the chosen one, or the active language's.
+    #[must_use]
+    pub fn week_starts_on(&self) -> Weekday {
+        self.week_start.unwrap_or_else(language_week_start)
+    }
+
     /// What the settings file may hold: the framework's keys and qfocus's own, each with its
     /// default and its bounds.
     #[must_use]
     pub fn schema() -> Schema {
         let names = WEEKDAYS.map(|(_, name)| name);
         Schema::builtin()
-            .choice(WEEK_START, names, "monday")
+            // No default of its own: a value that cannot be read is taken out, and the week
+            // follows the language again.
+            .optional(WEEK_START, SettingKind::choice(names))
             .check(DAY_ROLLOVER, "00:00".to_owned(), |text: &String| TimeOfDay::parse(text).is_some())
             .check(IDLE_AFTER, 15 * 60_i64, |seconds| (IDLE_LEAST..=IDLE_MOST).contains(seconds))
             .check(CEILING, 12 * 3_600_i64, |seconds| (CEILING_LEAST..=CEILING_MOST).contains(seconds))
@@ -114,7 +124,7 @@ impl Prefs {
             week_start: settings
                 .get::<String>(WEEK_START)
                 .and_then(|name| WEEKDAYS.iter().find(|(_, known)| *known == name).map(|(day, _)| *day))
-                .unwrap_or(defaults.week_start),
+                .or(defaults.week_start),
             rollover: settings
                 .get::<String>(DAY_ROLLOVER)
                 .and_then(|text| TimeOfDay::parse(&text))
@@ -132,7 +142,7 @@ impl Prefs {
     /// file rather than written, so the file holds only what was chosen.
     pub fn write(&self, settings: &mut Settings) {
         let defaults = Self::default();
-        let name = WEEKDAYS.iter().find(|(day, _)| *day == self.week_start).map_or("monday", |(_, name)| *name);
+        let name = WEEKDAYS.iter().find(|(day, _)| Some(*day) == self.week_start).map_or("monday", |(_, name)| *name);
         store(settings, WEEK_START, name.to_owned(), self.week_start == defaults.week_start);
         let rollover = format!("{:02}:{:02}", self.rollover.hour, self.rollover.minute);
         store(settings, DAY_ROLLOVER, rollover, self.rollover == defaults.rollover);
@@ -142,6 +152,18 @@ impl Prefs {
         store(settings, STOP_AT_GOAL, self.stop_at_goal, self.stop_at_goal == defaults.stop_at_goal);
         store(settings, DEFAULT_GOAL, i64::from(self.default_goal), self.default_goal == defaults.default_goal);
     }
+}
+
+/// The first day of the week in the active language, as the framework's calendar reads it;
+/// Monday where no language is in force, as in the ISO week.
+#[must_use]
+pub fn language_week_start() -> Weekday {
+    qframe::t!("quvyta.date.first-weekday")
+        .trim()
+        .parse::<u8>()
+        .ok()
+        .and_then(Weekday::from_number)
+        .unwrap_or(Weekday::Monday)
 }
 
 /// Stores `value` under `key`, or removes the key when the value `is_default`.
@@ -160,7 +182,8 @@ mod tests {
     #[test]
     fn the_defaults_are_the_documented_ones() {
         let prefs = Prefs::default();
-        assert_eq!(prefs.week_start, Weekday::Monday);
+        assert_eq!(prefs.week_start, None, "the week follows the language");
+        assert_eq!(prefs.week_starts_on(), Weekday::Monday, "which is the ISO week where there is none");
         assert_eq!(prefs.rollover, TimeOfDay::new(0, 0, 0));
         assert_eq!(prefs.idle_after, Duration::from_secs(900));
         assert_eq!(prefs.ceiling, 43_200);
@@ -172,7 +195,7 @@ mod tests {
     #[test]
     fn chosen_values_round_trip_through_the_file_and_defaults_are_not_written() {
         let prefs = Prefs {
-            week_start: Weekday::Sunday,
+            week_start: Some(Weekday::Sunday),
             rollover: TimeOfDay::new(4, 30, 0),
             idle_after: Duration::from_secs(600),
             ceiling: 8 * 3_600,

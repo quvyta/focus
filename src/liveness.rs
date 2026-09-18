@@ -331,7 +331,7 @@ mod tests {
         let at = STARTED - 5_400;
         assert_eq!(moment_words(at, STARTED + 10 * HOUR, 180), "11:30");
         let mut i18n = qframe::i18n::I18n::builtin();
-        for (file, text) in crate::locales() {
+        for &(file, text) in crate::locales() {
             i18n.add_source(file, text);
         }
         i18n.set_active("tr");

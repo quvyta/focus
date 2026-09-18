@@ -192,7 +192,7 @@ fn report_parse_error(error: &ParseError, err: &mut impl Write) -> io::Result<u8
 /// English when neither is known.
 fn translator(code: Option<&str>) -> Arc<I18n> {
     let mut i18n = I18n::builtin();
-    for (file, text) in locales() {
+    for &(file, text) in locales() {
         i18n.add_source(file, text);
     }
     let detected = code.map(str::to_owned).or_else(|| i18n.detect(|name| std::env::var(name).ok()));

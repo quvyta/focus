@@ -20,24 +20,19 @@ use crate::session::Session;
 use crate::stats;
 use crate::tree::{Goal, Tree as Catalog};
 
-/// A one-line warning above a screen: a mark and the words, so the meaning never rests on the
-/// colour alone.
+/// A warning above a screen: a mark and the words, so the meaning never rests on the colour
+/// alone. A long one wraps rather than being cut.
 pub fn warning_line<M: 'static>(text: impl Into<String>, ui: &mut View<'_, M>) {
     let mark = ui.env().icons().glyph("warning").into_owned();
-    ui.add(
-        Text::rich([Span::new(format!("{mark} ")).color("warning"), Span::new(text.into()).role("secondary")])
-            .no_wrap(),
-    )
-    .fill_width();
+    ui.add(Text::rich([Span::new(format!("{mark} ")).color("warning"), Span::new(text.into()).role("secondary")]))
+        .fill_width();
 }
 
-/// A one-line remark above a screen, marked as information.
+/// A remark above a screen, marked as information; a long one wraps rather than being cut.
 pub fn info_line<M: 'static>(text: impl Into<String>, ui: &mut View<'_, M>) {
     let mark = ui.env().icons().glyph("info").into_owned();
-    ui.add(
-        Text::rich([Span::new(format!("{mark} ")).color("info"), Span::new(text.into()).role("secondary")]).no_wrap(),
-    )
-    .fill_width();
+    ui.add(Text::rich([Span::new(format!("{mark} ")).color("info"), Span::new(text.into()).role("secondary")]))
+        .fill_width();
 }
 
 /// `seconds` as "how long ago", in the largest unit that fits: seconds, minutes, hours or days.
@@ -106,7 +101,8 @@ pub fn goal_rows(
     extra: Option<(crate::id::Id, u64)>,
 ) -> Vec<GoalRow> {
     let measure = |goal: Goal, id: crate::id::Id, focuses: &[crate::id::Id], name: &str| {
-        let (mut done, amount) = stats::goal_progress(goal, focuses, sessions, today, prefs.week_start, prefs.rollover);
+        let (mut done, amount) =
+            stats::goal_progress(goal, focuses, sessions, today, prefs.week_starts_on(), prefs.rollover);
         if let Some((focus, seconds)) = extra
             && focuses.contains(&focus)
         {

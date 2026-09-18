@@ -124,7 +124,7 @@ mod tests {
         assert!(!legacy.join("settings.toml").exists());
         assert_eq!(read(&legacy.join("settings.toml.bak")), "old backup\n");
         assert_eq!(read(&legacy.join("keymap.toml")), "[app]\n");
-        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Weekday::Sunday);
+        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Some(Weekday::Sunday));
         assert_eq!(loaded.settings.path(), Some(folder.join("focus.conf").as_path()));
         let _ = fs::remove_dir_all(&folder);
     }
@@ -140,7 +140,7 @@ mod tests {
 
         assert!(loaded.left_behind.is_empty(), "{:?}", loaded.left_behind);
         assert_eq!(read(&folder.join("focus.conf")), SUNDAY);
-        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Weekday::Sunday);
+        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Some(Weekday::Sunday));
         let _ = fs::remove_dir_all(&folder);
     }
 
@@ -155,7 +155,7 @@ mod tests {
 
         assert_eq!(read(&legacy.join("settings.toml")), SUNDAY, "the old file is never touched");
         assert_eq!(read(&folder.join("focus.conf")), "week-start = \"saturday\"\n");
-        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Weekday::Saturday);
+        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Some(Weekday::Saturday));
         assert_eq!(loaded.left_behind.len(), 1, "{:?}", loaded.left_behind);
         assert!(loaded.left_behind[0].message.contains("settings.toml"), "{}", loaded.left_behind[0]);
         let _ = fs::remove_dir_all(&folder);
@@ -206,7 +206,7 @@ mod tests {
         assert!(loaded.left_behind.is_empty(), "{:?}", loaded.left_behind);
         assert_eq!(read(&folder.join("focus.conf.bak")), text, "what the user wrote is kept");
         assert!(!loaded.settings.diagnostics().is_empty());
-        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, Weekday::Monday);
+        assert_eq!(Prefs::from_settings(&loaded.settings).week_start, None);
         let _ = fs::remove_dir_all(&folder);
     }
 }

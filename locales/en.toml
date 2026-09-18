@@ -24,6 +24,7 @@ quit-cancel = "Cancel"
 
 [today]
 date = "{weekday}, {day} {month}"
+date-short = "{day} {month}"
 none = "—"
 empty-title = "Nothing to focus on yet"
 empty-message = "Start with a category, then write your first focus under it."
@@ -294,12 +295,12 @@ default-goal = "Suggested goal"
 default-goal-text = "What the goal field starts from for a row without one."
 too-short = "At least {least}."
 danger = "Sweeping actions"
-danger-text = "Each is undone with ctrl+z: what they take goes to the trash and the archive, never away."
-reset = "Hold to delete records"
+danger-text = "Hold a button down to act. Each is undone with ctrl+z: what it takes goes to the trash and the archive, never away."
+reset = "Delete records"
 reset-text = "Every record moves to the trash; the categories and focuses stay."
-older = "Hold to delete older"
+older = "Delete older"
 older-text = "Records that began before the chosen day move to the trash."
-delete = "Hold to delete everything"
+delete = "Delete everything"
 delete-text = "Every record moves to the trash and every category and focus is archived."
 purge-group = "Permanent deletion"
 purge-group-text = "Removes from the disk what is in the trash and the archive. This cannot be undone."
@@ -410,14 +411,15 @@ days = { one = "{n} day", other = "{n} days" }
 12 = "December"
 [cli]
 usage = """qfocus                open the interface
-qfocus start FOCUS    start a counter and exit; FOCUS is a name or category/focus
+qfocus start FOCUS    start a counter and exit; FOCUS: a name or category/focus
 qfocus stop           stop the running counter and record it
 qfocus status         one line: the running focus and its time so far
 qfocus today          one line: today's total
   --switch            with start: stop whatever is running first
   --json              print one JSON object instead of text
   -h, --help          this text
-exit codes: 0 done · 1 not found · 2 an open window is writing · 3 already running · 4 nothing running"""
+exit codes: 0 done · 1 not found · 2 an open window is writing
+            3 already running · 4 nothing running"""
 no-data-dir = "There is no data folder on this system; nothing can be recorded from the command line."
 unknown-command = "Unknown command: {name}"
 missing-name = "start needs a focus name."

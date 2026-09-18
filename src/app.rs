@@ -53,6 +53,9 @@ const DASHBOARD_TOP: usize = 3;
 /// Cells the dashboard keeps free on each side of the screen.
 const DASHBOARD_MARGIN: u16 = 2;
 
+/// Cells between the edge of the terminal and the header on each side.
+const HEADER_PADDING: u16 = 1;
+
 /// "3 records", counted for the purge's question and its answer.
 fn purge_records(count: usize) -> String {
     t!("settings.purge-records", n = u32::try_from(count).unwrap_or(u32::MAX))
@@ -87,7 +90,7 @@ pub fn run() -> io::Result<()> {
     let app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone())
         .with_left_behind(left_behind);
     let mut runtime = Runtime::new(app).settings(&settings).keymap_source("keymap.toml", KEYMAP);
-    for (file, text) in crate::locales() {
+    for &(file, text) in crate::locales() {
         runtime = runtime.locale_source(file, text);
     }
     runtime.run()
@@ -1711,7 +1714,7 @@ impl QFocus {
         let units = units();
         let top = stats::top_focuses(&self.sessions, stats::Range::day(self.date), DASHBOARD_TOP, self.prefs.rollover);
         let goals = goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, None);
-        let week = stats::goal_range(crate::tree::Period::Week, self.date, self.prefs.week_start);
+        let week = stats::goal_range(crate::tree::Period::Week, self.date, self.prefs.week_starts_on());
         let week_total = stats::total(&self.sessions, week, self.prefs.rollover);
         let dialog = Modal::new().dismissable(false).width(width);
         ui.add_with(dialog, |ui| {
@@ -1747,18 +1750,38 @@ impl QFocus {
     /// The top: the name, the day and its total, the tabs, and every standing warning under them.
     fn header(&self, ui: &mut View<'_, Msg>) {
         let day = self.date;
-        let date = t!(
+        let month = t!(&format!("months.{}", day.month()));
+        let long = t!(
             "today.date",
             weekday = t!(&format!("days.{}", day.weekday().number())),
             day = u32::from(day.day()),
-            month = t!(&format!("months.{}", day.month()))
+            month = month.clone()
         );
+        let short_date = t!("today.date-short", day = u32::from(day.day()), month = month);
+        let name = t!("app.name");
+        let total = short(self.total_today(), &units().as_units());
+        // The day gives up its weekday, then itself, before the total is cut: on a narrow
+        // terminal, and in languages with long day and month names, the total is what the
+        // header is read for.
+        // The row keeps two cells to spare: the spacer between the day and the total takes one
+        // and the row's own measure rounds one more away.
+        let room = ui.size().width.saturating_sub(HEADER_PADDING * 2);
+        let fits = |date: &str| {
+            [qframe::text::width(&name), 2, qframe::text::width(date), 2, qframe::text::width(&total)]
+                .iter()
+                .sum::<u16>()
+                + 2
+                <= room
+        };
+        let date = [long, short_date].into_iter().find(|date| fits(date));
         ui.column(|ui| {
             ui.row(|ui| {
-                ui.add(Text::rich([Span::new(t!("app.name")).color("accent").bold()]).no_wrap());
-                ui.add(Text::new(date).role("secondary").no_wrap());
+                ui.add(Text::rich([Span::new(name).color("accent").bold()]).no_wrap());
+                if let Some(date) = date {
+                    ui.add(Text::new(date).role("secondary").no_wrap());
+                }
                 ui.spacer();
-                ui.add(Text::new(short(self.total_today(), &units().as_units())).bold().no_wrap());
+                ui.add(Text::new(total).bold().no_wrap());
             })
             .gap(2)
             .fill_width();
@@ -1793,7 +1816,7 @@ impl QFocus {
                 warning_line(t!("app.unsaved", n = u32::try_from(self.pending.len()).unwrap_or(u32::MAX)), ui);
             }
         })
-        .padding(Padding::symmetric(0, 1))
+        .padding(Padding::symmetric(0, HEADER_PADDING))
         .fill_width();
     }
 
@@ -1932,6 +1955,7 @@ impl OwnedUnits {
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
+    use std::collections::BTreeMap;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::rc::Rc;
@@ -2128,8 +2152,167 @@ mod tests {
         recorded(dir, 24, rust, 29 * day, work(3_600), "");
     }
 
+    /// Every screen a person meets in a day of use, in `code` at forty columns: the Today page
+    /// empty and full, the counter and its break, the goal and countdown fields, each scale of
+    /// the charts with a bar picked, each view of the records with the form and the spans, the
+    /// whole settings page, and the quit and purge dialogs. Each comes back with its name and the
+    /// harness it was drawn in, so a check can look at the cells as well as the text.
+    fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
+        // Toasts are looked at where they are raised, then let go, so they do not stand over
+        // the next screen.
+        let settle = |h: &mut Harness<QFocus>| {
+            h.hover(0, 0).advance(Duration::from_secs(10));
+        };
+        let clock = FakeClock::new();
+        let empty = temp(&format!("tour-empty-{name}"));
+        let mut h = harness(app_at(&empty, &clock), 40, 24);
+        h.set_locale(code);
+        check("today, empty", &h);
+        settle(&mut h);
+        done(&empty);
+
+        let dir = temp(&format!("tour-{name}"));
+        history(&dir);
+        let store = Store::open(Paths::at(&dir, "test"));
+        let mut tree = store.tree.clone();
+        tree.categories[0].goal = Some(Goal { amount: 7_200, period: Period::Day });
+        tree.categories[0].focuses[0].goal = Some(Goal { amount: 3_600, period: Period::Week });
+        fs::write(store.paths.tree_file(), tree.write()).expect("tree written");
+        drop(store);
+        let mut h = harness(app_at(&dir, &clock), 40, 30);
+        h.set_locale(code);
+        check("today", &h);
+        settle(&mut h);
+        let rust = Row::Focus(Id::new(2, 2)).key();
+        h.send(Msg::Today(today::Msg::Select(rust.clone())));
+        h.press("g");
+        check("goal field", &h);
+        h.press("esc");
+        settle(&mut h);
+        h.press("t");
+        check("countdown field", &h);
+        h.press("esc");
+        check("cancelled", &h);
+        settle(&mut h);
+        let (x, y) = h.find("Rust").expect("the focus is listed");
+        h.mouse(MouseKind::Down(MouseButton::Right), x, y).mouse(MouseKind::Up(MouseButton::Right), x, y);
+        check("row menu", &h);
+        settle(&mut h);
+        h.press("esc");
+        h.send(Msg::Today(today::Msg::Activate(rust)));
+        clock.pass(600);
+        h.advance(Duration::from_secs(1));
+        check("counter", &h);
+        settle(&mut h);
+        h.press("p");
+        check("break", &h);
+        settle(&mut h);
+        h.press("n");
+        check("note field", &h);
+        settle(&mut h);
+        h.press("esc");
+        h.press("ctrl+q");
+        check("quit dialog", &h);
+        settle(&mut h);
+        h.press("esc");
+        for scale in 0..4 {
+            h.press("2");
+            h.send(Msg::Charts(charts::Msg::Scale(scale)));
+            check(&format!("charts {scale}"), &h);
+            settle(&mut h);
+            h.send(Msg::Charts(charts::Msg::Select(0)));
+            check(&format!("charts {scale}, picked"), &h);
+            settle(&mut h);
+        }
+        h.press("3");
+        for view in 0..4 {
+            h.send(Msg::Records(records::Msg::View(view)));
+            check(&format!("records {view}"), &h);
+            settle(&mut h);
+        }
+        h.send(Msg::Records(records::Msg::View(0)));
+        h.send(Msg::Records(records::Msg::Select(1)));
+        h.press("s");
+        check("spans", &h);
+        settle(&mut h);
+        h.press("esc");
+        h.press("a");
+        check("record form", &h);
+        settle(&mut h);
+        h.press("esc");
+        h.press("delete");
+        check("records, one removed", &h);
+        settle(&mut h);
+        h.resize(40, 160);
+        h.press("4");
+        check("settings", &h);
+        settle(&mut h);
+        h.send(Msg::Settings(settings::Msg::EmptyTrash));
+        check("purge dialog", &h);
+        settle(&mut h);
+        done(&dir);
+    }
+
+    /// Whether a character two cells wide lost its second cell: drawn in the last column, or
+    /// with something else drawn over the cell it covers. Either would shift or break the
+    /// columns after it in a real terminal.
+    fn broken_wide_cell(h: &Harness<QFocus>) -> Option<String> {
+        let buffer = h.buffer();
+        let (width, height) = (buffer.area.width, buffer.area.height);
+        for y in 0..height {
+            for x in 0..width {
+                let symbol = buffer[(x, y)].symbol();
+                if qframe::text::width(symbol) < 2 {
+                    continue;
+                }
+                if x + 1 >= width {
+                    return Some(format!("{symbol} is cut at the right edge of row {y}"));
+                }
+                let next = buffer[(x + 1, y)].symbol();
+                if !next.is_empty() && next != " " {
+                    return Some(format!("{next} is drawn over the second half of {symbol} at {x},{y}"));
+                }
+            }
+        }
+        None
+    }
+
+    /// Every language at forty columns: no key without text, no mark the aesthetics forbid, no
+    /// wide character broken, and no more text cut short than English has on the same screen.
+    /// What English still cuts there is the framework's to wrap (setting descriptions, the
+    /// action of a toast, a hold button's label), asked for in its request list.
+    ///
+    /// `QFOCUS_TOUR=<code>` prints that language's screens, for reading a translation where it
+    /// is shown.
+    #[test]
+    fn every_language_reads_whole_at_forty_columns() {
+        let shown = std::env::var("QFOCUS_TOUR").ok();
+        let mut english: BTreeMap<String, usize> = BTreeMap::new();
+        tour("en", "en-count", &mut |name, h| {
+            english.insert(name.to_owned(), h.screen().matches('…').count());
+        });
+        for &(file, _) in crate::locales() {
+            let code = file.trim_end_matches(".toml");
+            tour(code, code, &mut |name, h| {
+                let screen = h.screen();
+                if shown.as_deref() == Some(code) {
+                    println!("=== {code} · {name}\n{screen}");
+                }
+                assert!(!screen.contains('⟦'), "{code} · {name}: a key has no text\n{screen}");
+                assert_eq!(forbidden(&screen), None, "{code} · {name}\n{screen}");
+                assert_eq!(broken_wide_cell(h), None, "{code} · {name}\n{screen}");
+                let cut = screen.matches('…').count();
+                let allowed = english.get(name).copied().unwrap_or(0);
+                assert!(cut <= allowed, "{code} · {name}: {cut} texts cut short, English has {allowed}\n{screen}");
+            });
+        }
+    }
+
+    /// The charts over `dir`, the week pinned to Monday so the drawings do not move with the
+    /// language's calendar.
     fn charts_at(dir: &Path, clock: &FakeClock, width: u16, height: u16) -> Harness<QFocus> {
-        let mut h = harness(app_at(dir, clock), width, height);
+        let prefs = Prefs { week_start: Some(Weekday::Monday), ..Prefs::default() };
+        let mut h = harness(app_with(dir, clock, &prefs), width, height);
         h.press("2");
         assert_eq!(h.app().page(), Page::Charts);
         h
@@ -4161,9 +4344,9 @@ mod tests {
             "Stop at the goal",
             "Suggested goal",
             "Sweeping actions",
-            "Hold to delete records",
-            "Hold to delete older",
-            "Hold to delete everything",
+            "Delete records",
+            "Delete older",
+            "Delete everything",
         ] {
             assert!(screen.contains(text), "{text} missing:\n{screen}");
         }
@@ -4174,10 +4357,8 @@ mod tests {
         h.set_locale("tr").set_glyph_mode(GlyphMode::Ascii).resize(40, 60);
         let screen = h.screen();
         assert!(screen.contains("Gün dönümü"), "{screen}");
-        // At forty columns the held controls are cut by the framework, but each still reads as
-        // its own action.
-        for text in ["Toplu işlemler", "Basılı tut: kayıtlar", "Basılı tut: eskileri", "Basılı tut: her şeyi"]
-        {
+        // At forty columns each held control reads whole; the group's line says to hold them.
+        for text in ["Toplu işlemler", "basılı tutunca", "Kayıtları sil", "Eskileri sil", "Her şeyi sil"] {
             assert!(screen.contains(text), "{text} missing:\n{screen}");
         }
         assert_eq!(forbidden(&screen), None, "{screen}");
@@ -4265,21 +4446,34 @@ mod tests {
         h.advance(Duration::from_millis(100));
         assert!(h.screen().lines().next().is_some_and(|top| top.ends_with("30 min")), "{}", h.screen());
         assert_eq!(fs::read_to_string(&path).expect("settings written"), "", "a default is not written");
-        // The week window follows the first day of the week.
-        h.send(Msg::Settings(settings::Msg::WeekStart(6)));
-        assert_eq!(h.app().prefs().week_start, Weekday::Sunday);
+        // The week window follows the first day of the week: the language's until one is chosen.
+        assert_eq!(h.app().prefs().week_start, None);
         h.press("2").click_text("Week");
         let screen = h.screen();
-        let sun = screen.find("Sun").expect("Sunday label");
-        let sat = screen.find("Sat").expect("Saturday label");
-        assert!(sun < sat, "the week now runs from Sunday:\n{screen}");
+        let labels = screen.lines().find(|line| line.contains("Sun")).unwrap_or_default();
+        assert!(
+            labels.trim_start().starts_with("Sun"),
+            "an English week runs from Sunday, as the calendar's does:\n{screen}"
+        );
+        h.send(Msg::Settings(settings::Msg::WeekStart(5)));
+        assert_eq!(h.app().prefs().week_start, Some(Weekday::Saturday));
+        h.hover(0, 0);
+        let screen = h.screen();
+        let labels = screen.lines().find(|line| line.contains("Sun")).unwrap_or_default();
+        assert!(labels.trim_start().starts_with("Sat"), "the week now runs from Saturday:\n{screen}");
         // A shared setting is applied at once and written under the framework's key.
         h.send(Msg::Settings(settings::Msg::Shared(settings::Shared::Language("tr".to_owned()))));
         h.advance(Duration::from_millis(100));
         assert!(h.screen().contains("Grafikler"), "{}", h.screen());
         let written = fs::read_to_string(&path).expect("settings written");
         assert!(written.contains("language = \"tr\""), "{written}");
-        assert!(written.contains("week-start = \"sunday\""), "{written}");
+        assert!(written.contains("week-start = \"saturday\""), "{written}");
+        // Choosing the language's own first day unpins the week again.
+        h.send(Msg::Settings(settings::Msg::WeekStart(0)));
+        h.advance(Duration::from_millis(100));
+        assert_eq!(h.app().prefs().week_start, None, "Monday is where a Turkish week starts anyway");
+        let written = fs::read_to_string(&path).expect("settings written");
+        assert!(!written.contains("week-start"), "{written}");
         done(&dir);
     }
 
@@ -4291,7 +4485,7 @@ mod tests {
         let clock = FakeClock::new();
         let mut h = harness(app_at(&dir, &clock), 80, 40);
         h.press("4");
-        hold(&mut h, "Hold to delete records");
+        hold(&mut h, "Delete records");
         let screen = h.screen();
         assert!(screen.contains("3 sessions moved to the trash"), "{screen}");
         assert!(h.app().store().sessions.is_empty());
@@ -4333,7 +4527,7 @@ mod tests {
         let clock = FakeClock::new();
         let mut h = harness(app_at(&dir, &clock), 80, 40);
         h.press("4");
-        hold(&mut h, "Hold to delete everything");
+        hold(&mut h, "Delete everything");
         let screen = h.screen();
         assert!(screen.contains("2 sessions moved to the trash"), "{screen}");
         let tree = &h.app().store().tree;
@@ -4364,12 +4558,12 @@ mod tests {
         h.press("4");
         // The date starts a year back, where there is nothing yet.
         assert!(h.screen().contains("2025"), "{}", h.screen());
-        hold(&mut h, "Hold to delete older");
+        hold(&mut h, "Delete older");
         assert!(h.screen().contains("No records began before"), "{}", h.screen());
         assert_eq!(h.app().store().sessions.len(), 7);
         // Tuesday the 15th: the 14th, the 10th and August go; the 15th itself stays.
         h.send(Msg::Settings(settings::Msg::OlderDate(Date::new(2026, 9, 15).expect("valid date"))));
-        hold(&mut h, "Hold to delete older");
+        hold(&mut h, "Delete older");
         let screen = h.screen();
         assert!(screen.contains("3 sessions moved to the trash"), "{screen}");
         assert_eq!(h.app().store().sessions.len(), 4);
@@ -4393,7 +4587,7 @@ mod tests {
         let clock = FakeClock::new();
         let mut h = harness(app_at(&dir, &clock), 80, 60);
         h.press("4");
-        hold(&mut h, "Hold to delete records");
+        hold(&mut h, "Delete records");
         let paths = h.app().store().paths.clone();
         let month = fs::read(paths.month_file(2026, 9)).expect("month");
         h.click_text("Empty the trash");
@@ -4415,7 +4609,7 @@ mod tests {
         h.click_text("Çöpü boşalt");
         h.advance(Duration::from_millis(200));
         let screen = h.screen();
-        assert!(screen.contains("Çöp kalıcı olarak boşaltılsın mı?"), "{screen}");
+        assert!(screen.contains("Çöp tamamen boşaltılsın mı?"), "{screen}");
         assert!(screen.contains("2 kayıt ve 1 arşivli satır diskten"), "{screen}");
         assert!(screen.contains("Kalıcı olarak sil"), "{screen}");
         assert!(screen.contains("Onaylamak için sil yaz"), "{screen}");
@@ -4437,7 +4631,7 @@ mod tests {
         let clock = FakeClock::new();
         let mut h = harness(app_at(&dir, &clock), 80, 60);
         h.press("4");
-        hold(&mut h, "Hold to delete records");
+        hold(&mut h, "Delete records");
         h.click_text("Empty the trash");
         h.advance(Duration::from_millis(200));
         // The field has focus and Enter waits for the word.

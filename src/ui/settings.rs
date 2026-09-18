@@ -221,7 +221,12 @@ pub fn update<M: From<Msg> + Clone + Send + 'static>(
             (command, Some(Request::Shared(change)))
         }
         Msg::WeekStart(index) => match WEEKDAYS.get(index) {
-            Some((day, _)) => (Command::none(), Some(Request::Prefs(Prefs { week_start: *day, ..prefs.clone() }))),
+            // The language's own first day is not pinned, so the week keeps following the
+            // language when it changes.
+            Some((day, _)) => {
+                let week_start = (*day != crate::prefs::language_week_start()).then_some(*day);
+                (Command::none(), Some(Request::Prefs(Prefs { week_start, ..prefs.clone() })))
+            }
             None => (Command::none(), None),
         },
         Msg::Rollover(time) => {
@@ -366,7 +371,7 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
 
                 list.heading(t!("settings.time"));
                 let days = WEEKDAYS.map(|(day, _)| t!(&format!("days.{}", day.number())));
-                let chosen = WEEKDAYS.iter().position(|(day, _)| *day == prefs.week_start);
+                let chosen = WEEKDAYS.iter().position(|(day, _)| *day == prefs.week_starts_on());
                 list.row(SettingRow::new(t!("settings.week-start")), |ui| {
                     ui.add(Select::new(days).selected(chosen).on_select(|index| M::from(Msg::WeekStart(index))))
                         .width(Length::Cells(CONTROL_WIDTH));
@@ -549,7 +554,7 @@ mod tests {
         let mut screen = Settings::new(Vec::new());
         let prefs = Prefs::default();
         let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::WeekStart(6));
-        assert_eq!(request, Some(Request::Prefs(Prefs { week_start: Weekday::Sunday, ..Prefs::default() })));
+        assert_eq!(request, Some(Request::Prefs(Prefs { week_start: Some(Weekday::Sunday), ..Prefs::default() })));
         let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::Rollover(TimeOfDay::new(4, 15, 30)));
         assert_eq!(request, Some(Request::Prefs(Prefs { rollover: TimeOfDay::new(4, 15, 0), ..Prefs::default() })));
         let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::StopAtGoal(true));

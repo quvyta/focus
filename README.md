@@ -1,5 +1,13 @@
 # qfocus
 
+![qfocus counting an hour and a quarter on a focus, with the day's work in a strip above](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/counter.png)
+
+<p>
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/week.png" alt="The week in bars stacked by category, one day picked" width="32%">
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/records.png" alt="The records with one session's work and breaks laid out" width="32%">
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/today-tr.png" alt="The Today page in Turkish" width="32%">
+</p>
+
 **quvyta-focus** tracks what you focus on, from the terminal. You keep a short list of the things
 you work on, start a counter on one of them, and see where your time went in day, week, month
 and year charts. It is part of the Quvyta family of terminal applications, is built on
@@ -30,8 +38,8 @@ and year charts. It is part of the Quvyta family of terminal applications, is bu
 - **Command line.** Start and stop a counter, or print the running focus, without opening the
   interface.
 
-The interface follows your system language (English and Turkish are included) and uses the
-family's themes, icons, keys and mouse behaviour.
+The interface follows your system language (nine are included, see [Languages](#languages)) and
+uses the family's themes, icons, keys and mouse behaviour.
 
 ## Install
 
@@ -91,6 +99,21 @@ qfocus today          one line: today's total
 
 `qfocus status` fits in a shell prompt or a status bar. The exit codes are `0` done, `1` not
 found, `2` an open window is writing, `3` already running and `4` nothing running.
+
+## Languages
+
+qfocus speaks English, German, Spanish, French, Brazilian Portuguese, Russian, Simplified Chinese,
+Japanese and Turkish. It picks the system language (`LC_ALL`, `LC_MESSAGES`, `LANG`) and falls
+back to English; any of them can be chosen under Settings. Brazilian Portuguese and Simplified
+Chinese are chosen there for now, because the system setting (`pt_BR`, `zh_CN`) is not yet
+matched to them. A few words shared by every Quvyta program, such as the key hints at the bottom
+and the date picker, are still in English in the newer languages.
+
+Until you choose a day under Settings, the week starts where the language's calendar starts it:
+on Monday in most, on Sunday in English, Brazilian Portuguese and Japanese.
+
+Translation suggestions are welcome. Each language is one file under `locales/`; open an issue or
+a pull request with the wording you would use.
 
 ## Where your data lives
 
