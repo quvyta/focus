@@ -123,6 +123,8 @@ pub enum Msg {
     PurgeCancelled,
     /// The repair report was read and can go.
     ReadRepairs,
+    /// The report of the old files that were not moved was read and can go.
+    ReadLeftBehind,
     /// The application wrote the settings, or could not.
     Stored(Result<(), String>),
 }
@@ -154,6 +156,9 @@ pub struct Settings {
     /// What reading the settings file had to put right, until it is read.
     repairs: Vec<Diagnostic>,
     repairs_read: bool,
+    /// Files from an earlier version's settings folder that were not moved, until read.
+    left_behind: Vec<Diagnostic>,
+    left_behind_read: bool,
     /// Why the last write failed, until one succeeds.
     failure: Option<String>,
     /// A length typed under its floor, kept in the field with the reason until it is fixed.
@@ -166,7 +171,23 @@ impl Settings {
     /// The screen over a settings file that needed `repairs`.
     #[must_use]
     pub fn new(repairs: Vec<Diagnostic>) -> Self {
-        Self { repairs, repairs_read: false, failure: None, short: None, older: None }
+        Self {
+            repairs,
+            repairs_read: false,
+            left_behind: Vec::new(),
+            left_behind_read: false,
+            failure: None,
+            short: None,
+            older: None,
+        }
+    }
+
+    /// The screen that also says which `files` from an earlier version's settings folder were
+    /// left where they were.
+    #[must_use]
+    pub fn with_left_behind(mut self, files: Vec<Diagnostic>) -> Self {
+        self.left_behind = files;
+        self
     }
 
     /// The day the older records are deleted before: the one chosen, or a year before `today`.
@@ -236,6 +257,10 @@ pub fn update<M: From<Msg> + Clone + Send + 'static>(
             screen.repairs_read = true;
             (Command::none(), None)
         }
+        Msg::ReadLeftBehind => {
+            screen.left_behind_read = true;
+            (Command::none(), None)
+        }
         Msg::Stored(result) => {
             screen.failure = result.err();
             (Command::none(), None)
@@ -276,7 +301,12 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
 
     ui.add_with(ScrollView::new(), |ui| {
         ui.column(|ui| {
-            repairs(screen, ui);
+            if !screen.left_behind_read {
+                report(&Report::LEFT_BEHIND, &screen.left_behind, ui);
+            }
+            if !screen.repairs_read {
+                report(&Report::REPAIRS, &screen.repairs, ui);
+            }
             if let Some(reason) = &screen.failure {
                 warning_line(t!("settings.store-failed", reason = reason.clone()), ui);
             }
@@ -463,24 +493,48 @@ fn length_row<M: From<Msg> + Clone + Send + 'static>(
     });
 }
 
-/// The report of what reading the settings file had to put right. It stands until it is read:
-/// a repair is news, and news that disappears on its own is news nobody got.
-fn repairs<M: From<Msg> + Clone + Send + 'static>(screen: &Settings, ui: &mut View<'_, M>) {
-    if screen.repairs.is_empty() || screen.repairs_read {
+/// The words and the button of one report over the settings.
+struct Report {
+    title: &'static str,
+    text: &'static str,
+    dismiss: Msg,
+    id: &'static str,
+}
+
+impl Report {
+    /// What reading the settings file had to put right.
+    const REPAIRS: Self = Self {
+        title: "settings.repaired",
+        text: "settings.repaired-text",
+        dismiss: Msg::ReadRepairs,
+        id: "settings-repairs",
+    };
+    /// The files from an earlier version's settings folder that stayed where they were.
+    const LEFT_BEHIND: Self = Self {
+        title: "settings.left-behind",
+        text: "settings.left-behind-text",
+        dismiss: Msg::ReadLeftBehind,
+        id: "settings-left-behind",
+    };
+}
+
+/// A report over the settings with one line per diagnostic. It stands until it is read: a repair
+/// or a file left behind is news, and news that disappears on its own is news nobody got.
+fn report<M: From<Msg> + Clone + Send + 'static>(which: &Report, lines: &[Diagnostic], ui: &mut View<'_, M>) {
+    if lines.is_empty() {
         return;
     }
-    ui.add_with(Panel::new().title(t!("settings.repaired")), |ui| {
-        ui.add(Text::new(t!("settings.repaired-text")).role("secondary")).fill_width();
-        for repair in &screen.repairs {
-            let place = repair.location.as_ref().map(ToString::to_string);
-            let line = match place {
-                Some(place) => format!("{place}  {}", repair.message),
-                None => repair.message.clone(),
+    ui.add_with(Panel::new().title(t!(which.title)), |ui| {
+        ui.add(Text::new(t!(which.text)).role("secondary")).fill_width();
+        for line in lines {
+            let text = match line.location.as_ref() {
+                Some(place) => format!("{place}  {}", line.message),
+                None => line.message.clone(),
             };
-            let colour = if repair.severity == Severity::Error { "danger" } else { "warning" };
-            ui.add(Text::new(line).color(colour)).fill_width();
+            let colour = if line.severity == Severity::Error { "danger" } else { "warning" };
+            ui.add(Text::new(text).color(colour)).fill_width();
         }
-        ui.add(Button::new(t!("settings.repaired-dismiss")).on_press(M::from(Msg::ReadRepairs))).id("settings-repairs");
+        ui.add(Button::new(t!("settings.repaired-dismiss")).on_press(M::from(which.dismiss.clone()))).id(which.id);
     })
     .fill_width();
 }

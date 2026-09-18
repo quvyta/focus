@@ -323,8 +323,10 @@ nothing-older = "No records began before that day."
 restored-all = { one = "{n} session is back", other = "{n} sessions are back" }
 restore-partial = "{done} of {total} sessions came back, then: {reason}. Undo again for the rest."
 repaired = "The settings file was repaired"
-repaired-text = "What could not be read was replaced; the file as it was is kept as settings.toml.bak."
+repaired-text = "What could not be read was replaced; the file as it was is kept as focus.conf.bak."
 repaired-dismiss = "Read"
+left-behind = "Some old settings files stayed where they were"
+left-behind-text = "qfocus now keeps its settings in focus.conf. The files below were not moved, so that nothing would be overwritten; each is still whole where it was. Compare them and keep what you need by hand."
 store-failed = "The settings could not be written: {reason}"
 
 [dashboard]

@@ -323,8 +323,10 @@ nothing-older = "O günden önce başlayan kayıt yok."
 restored-all = { one = "{n} oturum geri geldi", other = "{n} oturum geri geldi" }
 restore-partial = "{total} oturumun {done} tanesi geri geldi, sonra: {reason}. Kalanı için yeniden geri al."
 repaired = "Ayar dosyası onarıldı"
-repaired-text = "Okunamayan değerler yerine varsayılanlar kondu; dosyanın eski hali settings.toml.bak olarak duruyor."
+repaired-text = "Okunamayan değerler yerine varsayılanlar kondu; dosyanın eski hali focus.conf.bak olarak duruyor."
 repaired-dismiss = "Okudum"
+left-behind = "Bazı eski ayar dosyaları yerinde kaldı"
+left-behind-text = "qfocus ayarlarını artık focus.conf dosyasında tutuyor. Aşağıdaki dosyalar hiçbir şeyin üzerine yazılmasın diye taşınmadı; her biri bulunduğu yerde eksiksiz duruyor. Karşılaştırıp gerekeni elle alabilirsin."
 store-failed = "Ayarlar yazılamadı: {reason}"
 
 [dashboard]

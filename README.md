@@ -96,8 +96,16 @@ Everything qfocus records is plain text in one folder:
 
 Inside it, `tree.toml` holds the categories and focuses, `sessions/` holds one file per month
 (`2026-09.log`), `trash/` keeps copies of removed sessions and `export/` receives exported files.
-The settings are in `settings.toml` in the matching configuration folder (`~/.config/quvyta/focus`
-on Linux).
+
+The settings are not records and live apart from them, in the folder the Quvyta applications share:
+
+| System | Settings file |
+|---|---|
+| Linux and other Unix systems | `$XDG_CONFIG_HOME/quvyta/focus.conf`, or `~/.config/quvyta/focus.conf` |
+| macOS | `~/Library/Application Support/Quvyta/focus.conf` |
+| Windows | `%APPDATA%\Quvyta\focus.conf` |
+
+Any other configuration files of qfocus go in the `focus` folder next to it. Versions before 0.1.1 kept the settings in `settings.toml` inside that folder; the first time a newer qfocus opens, it moves that file to `focus.conf`. Nothing is overwritten on the way: if `focus.conf` already exists, the old file stays where it is and the Settings page says so.
 
 Records are only ever added to: a correction, a removal and an undo are each a new line, so a
 mistake can always be taken back. The one exception is **Empty the trash** in Settings, which asks

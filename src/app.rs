@@ -36,9 +36,6 @@ use crate::ui::timer::{self as timer_screen, Screen as TimerScreen};
 use crate::ui::today::{self, Row, Today};
 use crate::ui::{GoalRow, goal_gauges, goal_rows, info_line, warning_line};
 
-/// The folder under the platform's config directory the settings live in.
-const SETTINGS_APP: &str = "quvyta/focus";
-
 /// The keymap compiled in, so an installed program carries its keys with it.
 const KEYMAP: &str = include_str!("../keymap.toml");
 
@@ -76,9 +73,10 @@ fn purge_rows(count: usize) -> String {
 ///
 /// Returns the terminal's error when the screen cannot be taken over or restored.
 pub fn run() -> io::Result<()> {
-    // The file is checked against every key qfocus knows and repaired with a backup when it has
-    // to be; the repairs are shown on the Settings page.
-    let settings = Settings::load(SETTINGS_APP).schema(Prefs::schema()).self_heal(true);
+    // The old settings file is brought over first; the file is then checked against every key
+    // qfocus knows and repaired with a backup when it has to be. Both reports are shown on the
+    // Settings page.
+    let crate::config::Loaded { settings, left_behind } = crate::config::load();
     let (store, on_disk) = match Paths::detect() {
         Some(paths) => (Store::open(paths), true),
         None => {
@@ -86,7 +84,8 @@ pub fn run() -> io::Result<()> {
             (Store::open_read_only(Paths::at(nowhere, machine_name())), false)
         }
     };
-    let app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone());
+    let app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone())
+        .with_left_behind(left_behind);
     let mut runtime = Runtime::new(app).settings(&settings).keymap_source("keymap.toml", KEYMAP);
     for (file, text) in crate::locales() {
         runtime = runtime.locale_source(file, text);
@@ -310,6 +309,14 @@ pub struct QFocus {
 }
 
 impl QFocus {
+    /// The application with `files` from an earlier version's settings folder that were not
+    /// moved, shown on the Settings page until read.
+    #[must_use]
+    pub fn with_left_behind(mut self, files: Vec<qframe::diagnostics::Diagnostic>) -> Self {
+        self.settings_screen = self.settings_screen.with_left_behind(files);
+        self
+    }
+
     /// The application over `store`. `on_disk` says whether the store is a real folder, `offset`
     /// is the local time zone if known, `clock` reads the clocks and `settings` is the settings
     /// file, from which the preferences are read.
@@ -2978,7 +2985,14 @@ mod tests {
         let screen = h.screen();
         assert!(screen.contains("could not be read"), "{screen}");
         assert!(screen.contains("moved aside so a new counter cannot"), "{screen}");
-        assert!(screen.contains(ASIDE), "{screen}");
+        // The dialog wraps the path wherever the line ends, which depends on how long the
+        // temporary folder's name is; read the dialog's text as one run to find it.
+        let dialog: String = screen
+            .lines()
+            .filter_map(|line| line.rsplit('▌').next().filter(|_| line.contains('▌')))
+            .map(str::trim)
+            .collect();
+        assert!(dialog.contains(ASIDE), "{screen}");
         let Some(Recover::Broken { problems, .. }) = h.app().recover.as_ref() else { panic!("no report") };
         assert!(!problems.is_empty());
         assert!(
@@ -4109,7 +4123,7 @@ mod tests {
 
     /// The application over `dir` with a settings file in it, so writes can be read back.
     fn app_on_file(dir: &Path, clock: &FakeClock) -> (QFocus, PathBuf) {
-        let path = dir.join("settings.toml");
+        let path = dir.join("focus.conf");
         fs::create_dir_all(dir).expect("folder");
         let settings = Settings::open(&path).schema(Prefs::schema()).self_heal(true);
         (QFocus::new(Store::open(Paths::at(dir, "test")), true, Some(180), clock.reader(), settings), path)
@@ -4167,6 +4181,29 @@ mod tests {
             assert!(screen.contains(text), "{text} missing:\n{screen}");
         }
         assert_eq!(forbidden(&screen), None, "{screen}");
+        done(&dir);
+    }
+
+    #[test]
+    fn old_settings_files_left_behind_are_reported_on_the_settings_page_until_read() {
+        let dir = temp("left-behind");
+        seeded(&dir);
+        let clock = FakeClock::new();
+        let file = qframe::diagnostics::Diagnostic::warning(
+            None,
+            "/cfg/quvyta/focus/settings.toml: /cfg/quvyta/focus.conf already exists; this file stays and nothing is merged",
+        );
+        let mut h = harness(app_at(&dir, &clock).with_left_behind(vec![file]), 100, 40);
+        h.press("4");
+        let screen = h.screen();
+        assert!(screen.contains("Some old settings files stayed where they were"), "{screen}");
+        assert!(screen.contains("focus.conf already exists"), "{screen}");
+        assert!(!screen.contains("The settings file was repaired"), "{screen}");
+        let (x, y) = h.find("Read").expect("the dismiss button");
+        h.click(x, y);
+        let screen = h.screen();
+        assert!(!screen.contains("Some old settings files stayed where they were"), "{screen}");
+        assert!(screen.contains("Week starts on"), "{screen}");
         done(&dir);
     }
 
