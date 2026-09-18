@@ -1,0 +1,31 @@
+# qfocus's own keys, layered over the framework's built-in keymap.
+#
+# Esc closes the open layer: an inline name field, a dialog. It reaches the application only
+# when no nearer widget used it. Enter and Space belong to the focused widget first, so on the
+# Today screen the tree starts the selected focus with Enter, and `toggle` only fires where the
+# tree is not focused. Quitting is the built-in chord: the application is asked before it and
+# holds the program back while a counter runs. `archive` is Delete on two pages: it archives a
+# row of the tree on Today and moves a session to the trash on Records; the charts have nothing
+# to remove. On Records `rename` corrects the selected session, `add` opens the form for one
+# typed in by hand and `spans` lays the selected session's spans out. On Today `goal` opens the
+# goal field of the selected row and `countdown` starts the selected focus with a countdown. The
+# pages are numbered in the order of the tabs.
+
+[app]
+back = "esc"
+archive = "delete"
+rename = "f2"
+pause = "p"
+note = "n"
+toggle = ["space", "ctrl+space"]
+today = "1"
+charts = "2"
+records = "3"
+settings = "4"
+search = "/"
+export = "e"
+undo = "ctrl+z"
+add = "a"
+spans = "s"
+goal = "g"
+countdown = "t"
