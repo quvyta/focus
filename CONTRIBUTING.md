@@ -53,7 +53,7 @@ Edit the file and open a pull request. The tests check what is easy to break by 
 - **Placeholders.** Words in braces, such as `{n}`, `{focus}` or `{duration}`, are filled in by the program. Keep each one exactly as written, never translated; you may move it wherever the sentence needs it.
 - **Plural forms.** A line with `one`, `other` and so on holds every form your language's plural rule can pick. Russian needs `one`, `few`, `many` and `other`; Japanese and Chinese need only `other`. The test names the form that is missing.
 - **The command line help** (`[cli] usage`) fits an 80-column terminal on every line. Characters of Chinese and Japanese count as two columns.
-- **Narrow windows.** Every screen is drawn at forty columns, and a translation may not cut more text short with `…` than English does on the same screen. If a word does not fit, a shorter word is almost always better than a shorter sentence around it.
+- **Narrow windows.** Every screen is drawn at forty columns, and no text may be cut short with `…`. If a word does not fit, a shorter word is almost always better than a shorter sentence around it.
 
 Run the tests with `cargo test`. To read every screen of a language as the test draws it, pass its code:
 

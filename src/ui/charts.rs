@@ -205,6 +205,7 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
     ui: &mut View<'_, M>,
 ) {
     let rollover = prefs.rollover;
+    let week_start = prefs.week_starts_on(ui.env().i18n().first_weekday());
     ui.column(|ui| {
         let labels = Scale::ALL.map(|scale| t!(&format!("charts.scale-{}", scale.key())));
         ui.add(Segmented::new(labels).selected(screen.scale.index()).on_select(|index| M::from(Msg::Scale(index))))
@@ -217,14 +218,14 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
             info_line(t!("charts.running"), ui);
         }
         let scale = screen.scale;
-        let range = scale.range(today, prefs.week_starts_on());
+        let range = scale.range(today, week_start);
         let this = stats::total(sessions, range, rollover);
         if this == 0 {
             let title = t!(&format!("charts.empty-{}", scale.key()));
             ui.add(EmptyState::new(title).message(t!("charts.empty-message"))).fill();
             return;
         }
-        let previous = stats::total(sessions, scale.previous(today, prefs.week_starts_on()), rollover);
+        let previous = stats::total(sessions, scale.previous(today, week_start), rollover);
         ui.add(Text::new(comparison(scale, this, previous, units)).role("secondary")).fill_width();
         let width = ui.size().width;
         // The day packs its rows itself, so its titles sit right on their charts.

@@ -57,7 +57,7 @@ const GOAL_MOST: i64 = u32::MAX as i64;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prefs {
     /// The day a week starts on, for the week windows of goals and charts, when one was chosen;
-    /// `None` follows the active language, as the framework's calendar does.
+    /// `None` follows the active language and region, as the framework's calendar does.
     pub week_start: Option<Weekday>,
     /// The hour the day turns at; sessions before it belong to the day before.
     pub rollover: TimeOfDay,
@@ -86,10 +86,11 @@ impl Default for Prefs {
 }
 
 impl Prefs {
-    /// The day the week starts on: the chosen one, or the active language's.
+    /// The day the week starts on: the chosen one, or `language`, the day the active language
+    /// and region start it on.
     #[must_use]
-    pub fn week_starts_on(&self) -> Weekday {
-        self.week_start.unwrap_or_else(language_week_start)
+    pub fn week_starts_on(&self, language: Weekday) -> Weekday {
+        self.week_start.unwrap_or(language)
     }
 
     /// What the settings file may hold: the framework's keys and qfocus's own, each with its
@@ -154,18 +155,6 @@ impl Prefs {
     }
 }
 
-/// The first day of the week in the active language, as the framework's calendar reads it;
-/// Monday where no language is in force, as in the ISO week.
-#[must_use]
-pub fn language_week_start() -> Weekday {
-    qframe::t!("quvyta.date.first-weekday")
-        .trim()
-        .parse::<u8>()
-        .ok()
-        .and_then(Weekday::from_number)
-        .unwrap_or(Weekday::Monday)
-}
-
 /// Stores `value` under `key`, or removes the key when the value `is_default`.
 fn store<T: qframe::storage::Setting>(settings: &mut Settings, key: &str, value: T, is_default: bool) {
     if is_default {
@@ -182,8 +171,10 @@ mod tests {
     #[test]
     fn the_defaults_are_the_documented_ones() {
         let prefs = Prefs::default();
-        assert_eq!(prefs.week_start, None, "the week follows the language");
-        assert_eq!(prefs.week_starts_on(), Weekday::Monday, "which is the ISO week where there is none");
+        assert_eq!(prefs.week_start, None, "the week follows the language and region");
+        assert_eq!(prefs.week_starts_on(Weekday::Sunday), Weekday::Sunday);
+        let chosen = Prefs { week_start: Some(Weekday::Saturday), ..Prefs::default() };
+        assert_eq!(chosen.week_starts_on(Weekday::Sunday), Weekday::Saturday, "a chosen day stands over theirs");
         assert_eq!(prefs.rollover, TimeOfDay::new(0, 0, 0));
         assert_eq!(prefs.idle_after, Duration::from_secs(900));
         assert_eq!(prefs.ceiling, 43_200);

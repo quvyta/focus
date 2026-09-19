@@ -178,3 +178,28 @@ fn the_command_line_help_fits_a_standard_terminal_in_every_language() {
         }
     }
 }
+
+#[test]
+fn the_system_setting_picks_each_language_even_where_its_code_names_a_region_or_a_script() {
+    let mut i18n = I18n::builtin();
+    for (file, text) in locales() {
+        assert!(i18n.add_source(file, text), "{file} did not load");
+    }
+    let cases = [
+        ("pt_BR.UTF-8", "pt-BR"),
+        ("pt_PT.UTF-8", "pt-BR"),
+        ("zh_CN.UTF-8", "zh-Hans"),
+        ("zh_SG.UTF-8", "zh-Hans"),
+        ("ja_JP.UTF-8", "ja"),
+        ("de_AT.UTF-8", "de"),
+        ("fr_CA.UTF-8", "fr"),
+        ("es_MX.UTF-8", "es"),
+        ("ru_RU.UTF-8", "ru"),
+        ("tr_TR.UTF-8", "tr"),
+        ("en_GB.UTF-8", "en"),
+    ];
+    for (lang, code) in cases {
+        let found = i18n.detect(|name| (name == "LANG").then(|| lang.to_owned()));
+        assert_eq!(found.as_deref(), Some(code), "LANG={lang}");
+    }
+}

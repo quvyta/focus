@@ -8,9 +8,10 @@
 ![qfocus counting an hour and a quarter on a focus, with the day's work in a strip above](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/counter.png)
 
 <p>
-  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/week.png" alt="The week in bars stacked by category, one day picked" width="32%">
-  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/records.png" alt="The records with one session's work and breaks laid out" width="32%">
-  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/today-tr.png" alt="The Today page in Turkish" width="32%">
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/week.png" alt="The week in bars stacked by category, one day picked" width="49%">
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/records.png" alt="The records with one session's work and breaks laid out" width="49%">
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/today-tr.png" alt="The Today page in Turkish" width="49%">
+  <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/today-ja.png" alt="The Today page in Japanese" width="49%">
 </p>
 
 **quvyta-focus** tracks what you focus on, from the terminal. You keep a short list of the things

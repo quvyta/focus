@@ -2,6 +2,19 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.5 - 2026-09-19
+
+### Changed
+
+- The week starts where your region starts it, when your system names one: Sunday in the United States, Monday in the United Kingdom, whatever the language. Without a region the language decides, as before. A day chosen under Settings still wins.
+- Every language is read at forty columns with no text cut short at all; the only exception left is the placeholder of the note field in the record form.
+- Longer setting descriptions, dialog titles, toast messages and dialog buttons wrap in narrow windows instead of being cut.
+- Japanese and Chinese text lines up with the terminal's cells and wraps by its own rules.
+
+### Added
+
+- A picture of the Today page in Japanese at the top of the README.
+
 ## 0.1.4 - 2026-09-19
 
 ### Added

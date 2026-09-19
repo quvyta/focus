@@ -5,10 +5,11 @@
 //! to what a screen asks for. The clock is read through one function handed in at the start, so
 //! a test can hand in a clock of its own and drive the timer without waiting.
 
+use std::cell::Cell;
 use std::io;
 use std::time::Duration;
 
-use qframe::date::{Date, DateTime, local_offset};
+use qframe::date::{Date, DateTime, Weekday, local_offset};
 use qframe::prelude::*;
 use qframe::runtime::{Confirm, Task, TaskId, Termination};
 use qframe::storage::{Settings, atomic_write};
@@ -276,6 +277,11 @@ pub struct QFocus {
     knows_boot: bool,
     /// What the person set about the application.
     prefs: Prefs,
+    /// The day the active language and region start the week on, set at the start of every
+    /// frame so that `update` measures weeks as the screen shows them. The view is the only
+    /// place the translator can be read; a function the framework would give for it anywhere
+    /// would make this unnecessary. Monday until the first frame.
+    language_week_start: Cell<Weekday>,
     /// The settings file, with the framework's keys and qfocus's own.
     settings: Settings,
     page: Page,
@@ -293,6 +299,9 @@ pub struct QFocus {
     quit_asked: bool,
     /// Goals already reached, or said to be, while the counter runs: each is said once.
     goals_said: Vec<Id>,
+    /// The first day of the week `goals_said` was measured with. When the week moves, the
+    /// goals it fills or empties are not crossings and are taken as they stand.
+    goals_week: Weekday,
     /// Whether the dashboard stands over the page: no counter runs and nothing was touched for
     /// a while. The page under it keeps its state.
     idle: bool,
@@ -341,6 +350,7 @@ impl QFocus {
             clock,
             knows_boot: Uptime::detects_suspend(),
             prefs: Prefs::from_settings(&settings),
+            language_week_start: Cell::new(Weekday::Monday),
             settings_screen: SettingsScreen::new(settings.diagnostics().to_vec()),
             settings,
             page: Page::Today,
@@ -353,6 +363,7 @@ impl QFocus {
             last_undo: None,
             quit_asked: false,
             goals_said: Vec::new(),
+            goals_week: Weekday::Monday,
             idle: false,
             quiet: false,
             minute: None,
@@ -426,6 +437,11 @@ impl QFocus {
     #[must_use]
     pub fn prefs(&self) -> &Prefs {
         &self.prefs
+    }
+
+    /// The day the week starts on: the chosen one, or the active language's and region's.
+    fn week_start(&self) -> Weekday {
+        self.prefs.week_starts_on(self.language_week_start.get())
     }
 
     /// The settings file as it stands in memory.
@@ -642,6 +658,7 @@ impl QFocus {
         screen.saved(self.save_running(&screen));
         // Goals already reached before this session are not news; only a crossing is said.
         self.goals_said = self.timer_goals(&screen).iter().filter(|goal| goal.reached()).map(|goal| goal.id).collect();
+        self.goals_week = self.week_start();
         self.timer = Some(screen);
         Command::batch([Command::toast(said), Command::focus(timer_screen::STOP), self.sync_tick()])
     }
@@ -815,16 +832,30 @@ impl QFocus {
         let focus = screen.focus();
         let category = self.store.tree.categories.iter().find(|c| c.focuses.iter().any(|f| f.id == focus));
         let mine = |goal: &GoalRow| goal.id == focus || category.is_some_and(|c| c.id == goal.id);
-        goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, Some((focus, screen.work_seconds())))
-            .into_iter()
-            .filter(mine)
-            .collect()
+        goal_rows(
+            &self.store.tree,
+            &self.sessions,
+            self.date,
+            &self.prefs,
+            self.week_start(),
+            Some((focus, screen.work_seconds())),
+        )
+        .into_iter()
+        .filter(mine)
+        .collect()
     }
 
     /// Says once each goal the running counter has just reached, and stops the counter for it
     /// when the person asked for that.
     fn goals_crossed(&mut self, now: Clocks) -> Command<Msg> {
         let Some(screen) = self.timer.as_ref() else { return Command::none() };
+        let week = self.week_start();
+        if week != self.goals_week {
+            self.goals_said =
+                self.timer_goals(screen).iter().filter(|goal| goal.reached()).map(|goal| goal.id).collect();
+            self.goals_week = week;
+            return Command::none();
+        }
         let crossed: Vec<GoalRow> = self
             .timer_goals(screen)
             .into_iter()
@@ -883,7 +914,8 @@ impl QFocus {
 
     /// Applies a message of the Settings screen and does what it asks.
     fn settings_message(&mut self, message: settings::Msg) -> Command<Msg> {
-        let (command, request) = settings::update(&mut self.settings_screen, &self.prefs, message);
+        let (command, request) =
+            settings::update(&mut self.settings_screen, &self.prefs, self.language_week_start.get(), message);
         match request {
             Some(settings::Request::Shared(change)) => {
                 match change {
@@ -1587,6 +1619,7 @@ impl App for QFocus {
     }
 
     fn view(&self, ui: &mut View<'_, Msg>) {
+        self.language_week_start.set(ui.env().i18n().first_weekday());
         // The watches live here, not on the screens: the counter runs on whichever page is open,
         // and a watch is only answered while the frame declares it. With a counter the silence
         // is the work's concern and, later, the screen's; without one it is the dashboard's.
@@ -1713,8 +1746,8 @@ impl QFocus {
         let blocks = stats::strip(&self.sessions, None, self.date, self.prefs.rollover);
         let units = units();
         let top = stats::top_focuses(&self.sessions, stats::Range::day(self.date), DASHBOARD_TOP, self.prefs.rollover);
-        let goals = goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, None);
-        let week = stats::goal_range(crate::tree::Period::Week, self.date, self.prefs.week_starts_on());
+        let goals = goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, self.week_start(), None);
+        let week = stats::goal_range(crate::tree::Period::Week, self.date, self.week_start());
         let week_total = stats::total(&self.sessions, week, self.prefs.rollover);
         let dialog = Modal::new().dismissable(false).width(width);
         ui.add_with(dialog, |ui| {
@@ -1837,7 +1870,14 @@ impl QFocus {
                             timer_screen::view(screen, &goals, &units().as_units(), self.quiet, ui);
                         }
                         None => {
-                            let goals = goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, None);
+                            let goals = goal_rows(
+                                &self.store.tree,
+                                &self.sessions,
+                                self.date,
+                                &self.prefs,
+                                self.week_start(),
+                                None,
+                            );
                             today::view(
                                 &self.today,
                                 &self.store.tree,
@@ -1853,7 +1893,8 @@ impl QFocus {
                 .fill();
             }
             (Page::Charts, timer) => {
-                let goals = goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, None);
+                let goals =
+                    goal_rows(&self.store.tree, &self.sessions, self.date, &self.prefs, self.week_start(), None);
                 charts::view(
                     &self.charts,
                     &self.sessions,
@@ -1955,7 +1996,6 @@ impl OwnedUnits {
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
-    use std::collections::BTreeMap;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::rc::Rc;
@@ -2028,7 +2068,8 @@ mod tests {
 
     fn harness(app: QFocus, width: u16, height: u16) -> Harness<QFocus> {
         let mut harness = Harness::with_env(app, env(), width, height);
-        harness.set_locale("en").set_glyph_mode(GlyphMode::Unicode).set_reduced_motion(true);
+        // The machine's region would set the week; the tests set it themselves.
+        harness.set_region(None).set_locale("en").set_glyph_mode(GlyphMode::Unicode).set_reduced_motion(true);
         harness
     }
 
@@ -2278,19 +2319,15 @@ mod tests {
     }
 
     /// Every language at forty columns: no key without text, no mark the aesthetics forbid, no
-    /// wide character broken, and no more text cut short than English has on the same screen.
-    /// What English still cuts there is the framework's to wrap (setting descriptions, the
-    /// action of a toast, a hold button's label), asked for in its request list.
+    /// wide character broken, and no text cut short. Two cuts are let through by name: a person's
+    /// own focus or category name in a table column, which cannot wrap, and the one place the
+    /// framework still cuts (see `may_be_cut`).
     ///
     /// `QFOCUS_TOUR=<code>` prints that language's screens, for reading a translation where it
     /// is shown.
     #[test]
     fn every_language_reads_whole_at_forty_columns() {
         let shown = std::env::var("QFOCUS_TOUR").ok();
-        let mut english: BTreeMap<String, usize> = BTreeMap::new();
-        tour("en", "en-count", &mut |name, h| {
-            english.insert(name.to_owned(), h.screen().matches('…').count());
-        });
         for &(file, _) in crate::locales() {
             let code = file.trim_end_matches(".toml");
             tour(code, code, &mut |name, h| {
@@ -2301,11 +2338,39 @@ mod tests {
                 assert!(!screen.contains('⟦'), "{code} · {name}: a key has no text\n{screen}");
                 assert_eq!(forbidden(&screen), None, "{code} · {name}\n{screen}");
                 assert_eq!(broken_wide_cell(h), None, "{code} · {name}\n{screen}");
-                let cut = screen.matches('…').count();
-                let allowed = english.get(name).copied().unwrap_or(0);
-                assert!(cut <= allowed, "{code} · {name}: {cut} texts cut short, English has {allowed}\n{screen}");
+                for cut in cut_texts(&screen) {
+                    assert!(may_be_cut(&cut, name, h), "{code} · {name}: \"{cut}…\" is cut short\n{screen}");
+                }
             });
         }
+    }
+
+    /// The text before every `…` on `screen`: what is left of each text cut short, back to the
+    /// gap that opens its cell.
+    fn cut_texts(screen: &str) -> Vec<String> {
+        screen
+            .lines()
+            .flat_map(|line| line.match_indices('…').map(move |(at, _)| &line[..at]))
+            .map(|before| {
+                let start = before.rfind("  ").map_or(0, |gap| gap + 2);
+                before[start..].trim_start_matches(['❯', ' ']).to_owned()
+            })
+            .collect()
+    }
+
+    /// Whether the text left as `cut` on the screen `name` may stand cut short: a person's own
+    /// name in a table column, which cannot wrap, or a place the framework still cuts.
+    fn may_be_cut(cut: &str, name: &str, h: &Harness<QFocus>) -> bool {
+        let tree = &h.app().store().tree;
+        let names =
+            tree.categories.iter().flat_map(|c| std::iter::once(&c.name).chain(c.focuses.iter().map(|f| &f.name)));
+        let own_name = names.into_iter().any(|full| full.len() > cut.len() && full.starts_with(cut));
+        // Framework request 29: a form field keeps its label beside a text input too narrow for
+        // the input's placeholder, so the note's placeholder is cut in every language.
+        let placeholder = name == "record form"
+            && !cut.is_empty()
+            && h.env().i18n().translate("form.note-placeholder", &[]).starts_with(cut);
+        (own_name && !cut.is_empty()) || placeholder
     }
 
     /// The charts over `dir`, the week pinned to Monday so the drawings do not move with the
@@ -2994,6 +3059,31 @@ mod tests {
         done(&dir);
     }
 
+    #[test]
+    fn a_goal_the_regions_week_had_already_filled_when_a_counter_was_taken_over_is_not_news() {
+        let dir = temp("adopt-week");
+        let (_, focus) = seeded(&dir);
+        // Fifty minutes on Sunday and an hour on the counter left running: a hundred minutes of
+        // a week goal of a hundred where the week starts on Sunday, sixty where it starts on
+        // Monday, the day the counter is taken over with before the first frame.
+        recorded(&dir, 30, focus, 5 * 86_400, vec![Span::new(SpanKind::Work, 0, 3_000, ClockSource::Mono)], "");
+        let store = Store::open(Paths::at(&dir, "test"));
+        let mut tree = store.tree.clone();
+        tree.categories[0].focuses[0].goal = Some(Goal { amount: 6_000, period: Period::Week });
+        fs::write(store.paths.tree_file(), tree.write()).expect("tree written");
+        drop(store);
+        left_running(&dir, focus, NOON - 3_600, Watch::None);
+        let clock = FakeClock::new();
+        let prefs = Prefs { stop_at_goal: true, ..Prefs::default() };
+        let mut h = harness(app_with(&dir, &clock, &prefs).knows_boot(true), 80, 24);
+        h.set_locale("tr").set_region(Some("US"));
+        assert!(h.app().timer().is_some(), "{}", h.screen());
+        clock.pass(60);
+        h.advance(Duration::from_secs(1));
+        assert!(h.app().timer().is_some(), "the goal was full before, so nothing stops:\n{}", h.screen());
+        h.press("space");
+        done(&dir);
+    }
     #[test]
     fn a_counter_cut_by_a_restart_opens_the_dialog_with_the_reason_and_saves_up_to_the_cut() {
         let dir = temp("adopt-restart");
@@ -4473,6 +4563,94 @@ mod tests {
         h.advance(Duration::from_millis(100));
         assert_eq!(h.app().prefs().week_start, None, "Monday is where a Turkish week starts anyway");
         let written = fs::read_to_string(&path).expect("settings written");
+        assert!(!written.contains("week-start"), "{written}");
+        done(&dir);
+    }
+
+    /// The words of the screen's line that holds `label`.
+    fn row_words(screen: &str, label: &str) -> Vec<String> {
+        let line = screen.lines().find(|line| line.contains(label)).unwrap_or_default();
+        line.split_whitespace().map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn the_region_sets_where_the_week_starts_and_without_one_the_language_does() {
+        let dir = temp("week-region");
+        let (_, focus) = seeded(&dir);
+        // Fifty minutes on Sunday, five days before this Friday, and five minutes today.
+        recorded(&dir, 30, focus, 5 * 86_400, vec![Span::new(SpanKind::Work, 0, 3_000, ClockSource::Mono)], "");
+        recorded(&dir, 31, focus, 3_600, vec![Span::new(SpanKind::Work, 0, 300, ClockSource::Mono)], "");
+        let clock = FakeClock::new();
+        // Language, region, the first day's full and short names, and the settings row's label.
+        let cases = [
+            ("en", None, "Sunday", "Sun", "Week starts on"),
+            ("tr", None, "Pazartesi", "Pzt", "Hafta başı"),
+            ("tr", Some("US"), "Pazar", "Paz", "Hafta başı"),
+            ("en", Some("GB"), "Monday", "Mon", "Week starts on"),
+        ];
+        for (language, region, day, short, label) in cases {
+            let mut h = harness(app_at(&dir, &clock), 100, 60);
+            h.set_locale(language).set_region(region);
+            h.press("4");
+            let screen = h.screen();
+            assert!(
+                row_words(&screen, label).iter().any(|word| word == day),
+                "{language} in {region:?} starts the week on {day}:\n{screen}"
+            );
+            h.press("2").click_text(if language == "en" { "Week" } else { "Hafta" });
+            let screen = h.screen();
+            let labels = screen.lines().find(|line| line.contains(short) && line.split_whitespace().count() == 7);
+            assert!(
+                labels.is_some_and(|line| line.trim_start().starts_with(short)),
+                "the week chart starts on {short} for {language} in {region:?}:\n{screen}"
+            );
+        }
+        done(&dir);
+    }
+
+    #[test]
+    fn a_weekly_goal_is_measured_over_the_regions_week() {
+        let dir = temp("week-region-goal");
+        let (_, focus) = seeded(&dir);
+        // Fifty minutes on Sunday and five today: fifty-five of a sixty-minute week goal where
+        // the week starts on Sunday, five where it starts on Monday.
+        recorded(&dir, 30, focus, 5 * 86_400, vec![Span::new(SpanKind::Work, 0, 3_000, ClockSource::Mono)], "");
+        recorded(&dir, 31, focus, 3_600, vec![Span::new(SpanKind::Work, 0, 300, ClockSource::Mono)], "");
+        let store = Store::open(Paths::at(&dir, "test"));
+        let mut tree = store.tree.clone();
+        tree.categories[0].focuses[0].goal = Some(Goal { amount: 3_600, period: Period::Week });
+        fs::write(store.paths.tree_file(), tree.write()).expect("tree written");
+        drop(store);
+        let prefs = Prefs { stop_at_goal: true, ..Prefs::default() };
+        for (region, stops) in [(Some("US"), true), (Some("GB"), false)] {
+            let clock = FakeClock::new();
+            let mut h = harness(app_with(&dir, &clock, &prefs), 80, 24);
+            h.set_locale("tr").set_region(region);
+            h.click_text("Rust");
+            assert!(h.app().timer().is_some(), "{}", h.screen());
+            clock.pass(400);
+            h.advance(Duration::from_secs(1));
+            assert_eq!(h.app().timer().is_none(), stops, "the goal is crossed in {region:?}:\n{}", h.screen());
+            if !stops {
+                h.press("space");
+            }
+            drop(h);
+        }
+        done(&dir);
+    }
+
+    #[test]
+    fn choosing_the_regions_own_first_day_leaves_the_week_unpinned() {
+        let dir = temp("week-region-unpinned");
+        let clock = FakeClock::new();
+        let (app, path) = app_on_file(&dir, &clock);
+        let mut h = harness(app, 80, 24);
+        h.set_locale("tr").set_region(Some("US"));
+        h.send(Msg::Settings(settings::Msg::WeekStart(0)));
+        assert_eq!(h.app().prefs().week_start, Some(Weekday::Monday), "Monday is not where this week starts");
+        h.send(Msg::Settings(settings::Msg::WeekStart(6)));
+        assert_eq!(h.app().prefs().week_start, None, "Sunday is where the region starts it anyway");
+        let written = fs::read_to_string(&path).unwrap_or_default();
         assert!(!written.contains("week-start"), "{written}");
         done(&dir);
     }

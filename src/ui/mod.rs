@@ -10,7 +10,7 @@ pub mod settings;
 pub mod timer;
 pub mod today;
 
-use qframe::date::Date;
+use qframe::date::{Date, Weekday};
 use qframe::prelude::*;
 use qframe::widgets::{Gauge, Span};
 
@@ -90,19 +90,20 @@ fn hours_text(seconds: u64) -> String {
 }
 
 /// Every goal of the catalogue's shown rows, categories first in their order and each one's
-/// focuses after it, measured over `sessions` around `today` with the windows `prefs` gives.
-/// `extra` is work not recorded yet, the running counter's, counted for the goals of its focus.
+/// focuses after it, measured over `sessions` around `today` with weeks starting on
+/// `week_start` and days turning at the rollover `prefs` gives. `extra` is work not recorded
+/// yet, the running counter's, counted for the goals of its focus.
 #[must_use]
 pub fn goal_rows(
     catalog: &Catalog,
     sessions: &[Session],
     today: Date,
     prefs: &Prefs,
+    week_start: Weekday,
     extra: Option<(crate::id::Id, u64)>,
 ) -> Vec<GoalRow> {
     let measure = |goal: Goal, id: crate::id::Id, focuses: &[crate::id::Id], name: &str| {
-        let (mut done, amount) =
-            stats::goal_progress(goal, focuses, sessions, today, prefs.week_starts_on(), prefs.rollover);
+        let (mut done, amount) = stats::goal_progress(goal, focuses, sessions, today, week_start, prefs.rollover);
         if let Some((focus, seconds)) = extra
             && focuses.contains(&focus)
         {
