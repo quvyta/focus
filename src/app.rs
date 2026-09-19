@@ -1570,8 +1570,10 @@ impl App for QFocus {
     fn init(&mut self) -> Command<Msg> {
         // A lock held by another instance is retried on the ticks, so they start before the
         // first frame; and a counter the last run left is asked about before anything else.
+        // The keyboard starts on the list, so the arrows work before any tab is picked; a
+        // counter taken over moves it to its own button after this.
         let found = self.find_running();
-        Command::batch([found, self.sync_tick()])
+        Command::batch([Command::focus(today::TREE), found, self.sync_tick()])
     }
 
     fn before_quit(&self) -> Option<Msg> {
@@ -2381,6 +2383,16 @@ mod tests {
         h.press("2");
         assert_eq!(h.app().page(), Page::Charts);
         h
+    }
+
+    #[test]
+    fn the_keyboard_is_on_the_list_of_focuses_from_the_first_frame() {
+        let dir = temp("first-focus");
+        seeded(&dir);
+        let clock = FakeClock::new();
+        let h = harness(app_at(&dir, &clock), 80, 24);
+        assert!(h.is_focused(today::TREE), "the arrows reach the list without pressing 1 first");
+        done(&dir);
     }
 
     #[test]

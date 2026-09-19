@@ -5,7 +5,7 @@
 
 **Start a counter on what you are working on, and see where your time went in day, week, month and year charts, all from the terminal.**
 
-![qfocus counting an hour and a quarter on a focus, with the day's work in a strip above](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/counter.png)
+![qfocus in use: a focus is started from the Today page, the counter runs and takes a break, the session is stopped into a record, then the day and week charts and one record's work and breaks are shown](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/qfocus.gif)
 
 <p>
   <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/week.png" alt="The week in bars stacked by category, one day picked" width="49%">

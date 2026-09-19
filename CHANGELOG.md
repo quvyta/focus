@@ -2,6 +2,16 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.6 - 2026-09-19
+
+### Added
+
+- A moving picture at the top of the README: a counter started, paused and stopped, then the charts and a session's spans. It is drawn from made-up records by `docs/screenshots/make-gif.sh`.
+
+### Fixed
+
+- At launch the arrow keys move through the list of focuses right away; before, nothing had the keyboard until a tab was picked.
+
 ## 0.1.5 - 2026-09-19
 
 ### Changed
