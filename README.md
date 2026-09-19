@@ -1,5 +1,10 @@
 # qfocus
 
+[![crates.io](https://img.shields.io/crates/v/quvyta-focus.svg)](https://crates.io/crates/quvyta-focus)
+[![MIT licence](https://img.shields.io/crates/l/quvyta-focus.svg)](LICENSE)
+
+**Start a counter on what you are working on, and see where your time went in day, week, month and year charts, all from the terminal.**
+
 ![qfocus counting an hour and a quarter on a focus, with the day's work in a strip above](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/counter.png)
 
 <p>
@@ -95,6 +100,7 @@ qfocus today          one line: today's total
   --switch            with start: stop whatever is running first
   --json              print one JSON object instead of text
   -h, --help          show this text
+  -V, --version       print the version
 ```
 
 `qfocus status` fits in a shell prompt or a status bar. The exit codes are `0` done, `1` not
@@ -112,8 +118,7 @@ and the date picker, are still in English in the newer languages.
 Until you choose a day under Settings, the week starts where the language's calendar starts it:
 on Monday in most, on Sunday in English, Brazilian Portuguese and Japanese.
 
-Translation suggestions are welcome. Each language is one file under `locales/`; open an issue or
-a pull request with the wording you would use.
+Translation suggestions are welcome, and so are new languages. Each language is one file under `locales/`; open an issue with the wording you would use, or a pull request. [CONTRIBUTING.md](CONTRIBUTING.md#translations) explains how, with or without building anything.
 
 ## Where your data lives
 
@@ -161,6 +166,8 @@ Before your first commit, enable the checks (formatting, clippy, tests and docs)
 ```sh
 git config core.hooksPath .githooks
 ```
+
+[CONTRIBUTING.md](CONTRIBUTING.md) says more about testing and pull requests, and [CHANGELOG.md](CHANGELOG.md) lists what each release changed.
 
 ## Licence
 

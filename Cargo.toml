@@ -2,16 +2,17 @@
 name = "quvyta-focus"
 description = "Focus tracking in the terminal: timers, records and charts (beta)"
 repository = "https://github.com/quvyta/focus"
+homepage = "https://quvyta.com/qfocus/"
 readme = "README.md"
 keywords = ["tui", "terminal", "focus", "time-tracking", "productivity"]
 categories = ["command-line-utilities"]
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 # Only what the program is built from goes into the package; the rest of the repository is for
 # working on it.
-include = ["src/**", "locales/**", "keymap.toml", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
+include = ["src/**", "locales/**", "keymap.toml", "Cargo.toml", "Cargo.lock", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [lib]
 name = "qfocus"
@@ -36,4 +37,3 @@ redundant_closure_for_method_calls = "deny"
 semicolon_if_nothing_returned = "deny"
 uninlined_format_args = "deny"
 
-[dev-dependencies]

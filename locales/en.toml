@@ -418,6 +418,7 @@ qfocus today          one line: today's total
   --switch            with start: stop whatever is running first
   --json              print one JSON object instead of text
   -h, --help          this text
+  -V, --version       print the version
 exit codes: 0 done · 1 not found · 2 an open window is writing
             3 already running · 4 nothing running"""
 no-data-dir = "There is no data folder on this system; nothing can be recorded from the command line."

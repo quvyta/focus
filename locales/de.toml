@@ -419,6 +419,7 @@ qfocus today          eine Zeile: die Summe von heute
   --switch            mit start: stoppt zuerst, was gerade läuft
   --json              gibt ein JSON-Objekt statt Text aus
   -h, --help          dieser Text
+  -V, --version       gibt die Version aus
 Exit-Codes: 0 fertig · 1 nicht gefunden · 2 ein offenes Fenster schreibt
             3 läuft schon · 4 nichts läuft"""
 no-data-dir = "Auf diesem System gibt es keinen Datenordner; von der Kommandozeile kann nichts erfasst werden."

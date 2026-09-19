@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in qfocus does not work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for reporting. Your records are yours; please check that nothing private (the names of your focuses, your notes) is visible in what you paste or attach.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Start a focus
+        2. Take a break with p
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: qfocus version
+      description: The output of `qfocus --version`. Before 0.1.4, the version `cargo install --list` shows for quvyta-focus.
+    validations:
+      required: true
+  - type: dropdown
+    id: records
+    attributes:
+      label: Does it touch the records?
+      description: A time counted wrongly, a session missing or changed, a file problem reported.
+      options:
+        - "No"
+        - "Yes"
+        - I do not know
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      placeholder: Arch Linux, Fedora 43, macOS 26, Windows 11, ...
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal and its size
+      placeholder: kitty 0.44 at 120x36, GNOME Terminal, WezTerm, ...
+  - type: input
+    id: language
+    attributes:
+      label: Language of the interface
+      placeholder: English, Deutsch, Türkçe, ...
+  - type: textarea
+    id: shots
+    attributes:
+      label: Screenshot or text
+      description: A screenshot, or the text qfocus showed. Drag an image here to attach it.

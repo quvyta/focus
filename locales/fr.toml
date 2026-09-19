@@ -419,6 +419,7 @@ qfocus today          une ligne : le total du jour
   --switch            avec start : arrête d’abord ce qui tourne
   --json              affiche un objet JSON au lieu du texte
   -h, --help          ce texte
+  -V, --version       affiche la version
 codes de sortie : 0 fait · 1 introuvable · 2 une fenêtre ouverte écrit
                   3 déjà en cours · 4 rien en cours"""
 no-data-dir = "Pas de dossier de données sur ce système ; rien ne peut être enregistré depuis la ligne de commande."

@@ -418,6 +418,7 @@ qfocus today          tek satır: bugünün toplamı
   --switch            start ile: önce çalışanı durdurur
   --json              metin yerine tek bir JSON nesnesi basar
   -h, --help          bu metin
+  -V, --version       sürümü yazar
 çıkış kodları: 0 tamam · 1 bulunamadı · 2 açık bir pencere yazıyor
                3 zaten çalışıyor · 4 çalışan yok"""
 no-data-dir = "Bu sistemde veri klasörü yok; komut satırından kayıt tutulamaz."

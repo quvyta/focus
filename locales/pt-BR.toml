@@ -419,6 +419,7 @@ qfocus today          uma linha: o total de hoje
   --switch            com start: primeiro para o que estiver rodando
   --json              imprime um objeto JSON em vez de texto
   -h, --help          este texto
+  -V, --version       mostra a versão
 códigos de saída: 0 feito · 1 não encontrado · 2 uma janela aberta está gravando
                   3 já rodando · 4 nada rodando"""
 no-data-dir = "Não há pasta de dados neste sistema; nada pode ser registrado pela linha de comando."

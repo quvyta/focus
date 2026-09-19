@@ -419,6 +419,7 @@ qfocus today          una línea: el total de hoy
   --switch            con start: primero para lo que esté en marcha
   --json              imprime un objeto JSON en vez de texto
   -h, --help          este texto
+  -V, --version       muestra la versión
 códigos de salida: 0 hecho · 1 no encontrado · 2 una ventana abierta escribe
                    3 ya en marcha · 4 nada en marcha"""
 no-data-dir = "Este sistema no tiene carpeta de datos; no se puede registrar nada desde la línea de órdenes."

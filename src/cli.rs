@@ -62,6 +62,8 @@ pub enum Command {
     Today,
     /// Print the usage text.
     Help,
+    /// Print the program name and version.
+    Version,
 }
 
 /// A command and how to print its answer.
@@ -126,6 +128,7 @@ pub fn parse(args: &[String]) -> Result<Option<Request>, ParseError> {
             "--json" => json = true,
             "--switch" => switch = true,
             "--help" | "-h" => return Ok(Some(Request { command: Command::Help, json })),
+            "--version" | "-V" => return Ok(Some(Request { command: Command::Version, json })),
             word => words.push(word),
         }
     }
@@ -166,8 +169,12 @@ pub fn run(args: &[String], out: &mut impl Write, err: &mut impl Write) -> Optio
         }
     };
     let code = scope(translator(None), || {
-        if request.command == Command::Help {
-            return writeln!(out, "{}", t!("cli.usage")).map(|()| EXIT_OK);
+        // Help and version answer from the binary alone, so they work on a system without a
+        // data folder and never create one.
+        match request.command {
+            Command::Help => return writeln!(out, "{}", t!("cli.usage")).map(|()| EXIT_OK),
+            Command::Version => return writeln!(out, "{}", version_line()).map(|()| EXIT_OK),
+            _ => {}
         }
         let Some(paths) = Paths::detect() else {
             writeln!(err, "{}", t!("cli.no-data-dir"))?;
@@ -202,11 +209,21 @@ fn translator(code: Option<&str>) -> Arc<I18n> {
     Arc::new(i18n)
 }
 
+/// The one line `--version` prints: the command name and the crate version.
+///
+/// It is not translated: scripts and bug reports read it, and both binaries are the same
+/// program, so both name it `qfocus`. The version comes from the build so it cannot drift from
+/// the published package.
+#[must_use]
+pub fn version_line() -> String {
+    format!("qfocus {}", env!("CARGO_PKG_VERSION"))
+}
+
 /// Runs `request` against the store at `paths` as of `moment`, taking fresh identifiers from
 /// `new_id`. Must run inside an [`scope`] so the text has a language.
 ///
 /// The answer goes to `out`, problems to `err`, and the exit code is one of the `EXIT_`
-/// constants. [`Command::Help`] prints the usage on `out`.
+/// constants. [`Command::Help`] prints the usage and [`Command::Version`] the version on `out`.
 ///
 /// # Errors
 ///
@@ -224,6 +241,10 @@ pub fn execute(
     match &request.command {
         Command::Help => {
             writeln!(answer.out, "{}", t!("cli.usage"))?;
+            Ok(EXIT_OK)
+        }
+        Command::Version => {
+            writeln!(answer.out, "{}", version_line())?;
             Ok(EXIT_OK)
         }
         Command::Start { name, switch } => start(name, *switch, paths, moment, &new_id, &mut answer),
@@ -728,6 +749,25 @@ mod tests {
         }
     }
 
+    /// Every file under `dir` with its bytes, in path order, to prove a command left it alone.
+    fn snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut files = Vec::new();
+        let mut pending = vec![dir.to_path_buf()];
+        while let Some(next) = pending.pop() {
+            for entry in fs::read_dir(&next).expect("reads the folder") {
+                let path = entry.expect("an entry").path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else {
+                    let bytes = fs::read(&path).expect("reads the file");
+                    files.push((path, bytes));
+                }
+            }
+        }
+        files.sort();
+        files
+    }
+
     /// Work/Rust, Work/Reading, Home/Reading, Work/Old (archived), Gone/Piano (archived category).
     fn seed(dir: &Path) -> Paths {
         let paths = Paths::at(dir, "test");
@@ -804,6 +844,11 @@ mod tests {
         assert_eq!(parse(&args(&["status", "--json"])), Ok(Some(Request { command: Command::Status, json: true })));
         assert_eq!(parse(&args(&["today"])), Ok(Some(Request { command: Command::Today, json: false })));
         assert_eq!(parse(&args(&["-h"])), Ok(Some(Request { command: Command::Help, json: false })));
+        assert_eq!(parse(&args(&["-V"])), Ok(Some(Request { command: Command::Version, json: false })));
+        assert_eq!(
+            parse(&args(&["status", "--version"])),
+            Ok(Some(Request { command: Command::Version, json: false }))
+        );
         assert_eq!(parse(&args(&["start"])), Err(ParseError::MissingName));
         assert_eq!(parse(&args(&["dance"])), Err(ParseError::UnknownCommand("dance".to_owned())));
     }
@@ -820,6 +865,40 @@ mod tests {
         let err = String::from_utf8_lossy(&err);
         assert!(err.contains("dance"), "{err}");
         assert!(err.contains("qfocus start"), "{err}");
+    }
+
+    #[test]
+    fn run_prints_the_version_line_for_both_spellings() {
+        let expected = format!("qfocus {}\n", env!("CARGO_PKG_VERSION"));
+        for flag in ["--version", "-V"] {
+            let mut out = Vec::new();
+            let mut err = Vec::new();
+            let code = run(&args(&[flag]), &mut out, &mut err);
+            assert_eq!(code, Some(ExitCode::from(EXIT_OK)), "{flag}");
+            assert_eq!(String::from_utf8_lossy(&out), expected, "{flag}");
+            assert!(err.is_empty(), "{flag}: {}", String::from_utf8_lossy(&err));
+        }
+    }
+
+    #[test]
+    fn version_leaves_the_data_folder_alone() {
+        // An empty folder that does not exist yet: answering must not create it or anything in it.
+        let dir = temp("version");
+        let paths = Paths::at(&dir, "test");
+        for flag in ["--version", "-V"] {
+            let outcome = go(&paths, at(0), &[flag]);
+            assert_eq!(outcome.code, EXIT_OK);
+            assert_eq!(outcome.out, format!("qfocus {}\n", env!("CARGO_PKG_VERSION")));
+            assert!(outcome.err.is_empty(), "{}", outcome.err);
+        }
+        assert!(!dir.exists(), "the version answer created {}", dir.display());
+        // A seeded store is left byte for byte as it was.
+        let paths = seed(&dir);
+        let before = snapshot(&dir);
+        let outcome = go_in("tr", &paths, at(0), &["-V"]);
+        assert_eq!(outcome.out, format!("qfocus {}\n", env!("CARGO_PKG_VERSION")));
+        assert_eq!(snapshot(&dir), before);
+        done(&dir);
     }
 
     #[test]
