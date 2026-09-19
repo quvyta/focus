@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use qframe::date::{Date, TimeOfDay, Weekday};
+use qframe::date::{Date, TimeOfDay};
 use qframe::diagnostics::{Diagnostic, Severity};
 use qframe::icons::{IconMode, PillarStyle};
 use qframe::prelude::*;
@@ -204,11 +204,9 @@ impl Settings {
 }
 
 /// Applies `msg` over the preferences `prefs` and says what the application should do.
-/// `language_week_start` is the day the active language and region start the week on.
 pub fn update<M: From<Msg> + Clone + Send + 'static>(
     screen: &mut Settings,
     prefs: &Prefs,
-    language_week_start: Weekday,
     msg: Msg,
 ) -> (Command<M>, Option<Request>) {
     match msg {
@@ -226,7 +224,7 @@ pub fn update<M: From<Msg> + Clone + Send + 'static>(
             // The language's and region's own first day is not pinned, so the week keeps
             // following them when they change.
             Some((day, _)) => {
-                let week_start = (*day != language_week_start).then_some(*day);
+                let week_start = (*day != qframe::i18n::first_weekday()).then_some(*day);
                 (Command::none(), Some(Request::Prefs(Prefs { week_start, ..prefs.clone() })))
             }
             None => (Command::none(), None),
@@ -549,23 +547,29 @@ fn report<M: From<Msg> + Clone + Send + 'static>(which: &Report, lines: &[Diagno
 
 #[cfg(test)]
 mod tests {
+    use qframe::date::Weekday;
+
     use super::*;
 
     #[test]
     fn a_preference_change_hands_back_the_whole_set_with_one_field_changed() {
         let mut screen = Settings::new(Vec::new());
         let prefs = Prefs::default();
-        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Weekday::Monday, Msg::WeekStart(6));
+        // Outside the runtime the week starts on Monday, so Sunday is pinned.
+        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::WeekStart(6));
         assert_eq!(request, Some(Request::Prefs(Prefs { week_start: Some(Weekday::Sunday), ..Prefs::default() })));
         // Where the language and region start the week on Sunday, Sunday is not pinned.
-        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Weekday::Sunday, Msg::WeekStart(6));
-        assert_eq!(request, Some(Request::Prefs(Prefs::default())));
+        let mut american = qframe::i18n::I18n::builtin();
+        american.set_region(Some("US"));
+        assert_eq!(american.first_weekday(), Weekday::Sunday);
         let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Rollover(TimeOfDay::new(4, 15, 30)));
+            qframe::i18n::scope(std::sync::Arc::new(american), || update(&mut screen, &prefs, Msg::WeekStart(6)));
+        assert_eq!(request, Some(Request::Prefs(Prefs::default())));
+        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::Rollover(TimeOfDay::new(4, 15, 30)));
         assert_eq!(request, Some(Request::Prefs(Prefs { rollover: TimeOfDay::new(4, 15, 0), ..Prefs::default() })));
-        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Weekday::Monday, Msg::StopAtGoal(true));
+        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::StopAtGoal(true));
         assert_eq!(request, Some(Request::Prefs(Prefs { stop_at_goal: true, ..Prefs::default() })));
-        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Weekday::Monday, Msg::WeekStart(9));
+        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::WeekStart(9));
         assert_eq!(request, None);
     }
 
@@ -574,18 +578,18 @@ mod tests {
         let mut screen = Settings::new(Vec::new());
         let prefs = Prefs::default();
         let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Length(Timed::IdleAfter, Duration::from_secs(30)));
+            update(&mut screen, &prefs, Msg::Length(Timed::IdleAfter, Duration::from_secs(30)));
         assert_eq!(request, None);
         assert_eq!(screen.short, Some((Timed::IdleAfter, Duration::from_secs(30))));
         let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Length(Timed::IdleAfter, Duration::from_secs(120)));
+            update(&mut screen, &prefs, Msg::Length(Timed::IdleAfter, Duration::from_secs(120)));
         assert_eq!(request, Some(Request::Prefs(Prefs { idle_after: Duration::from_secs(120), ..Prefs::default() })));
         assert_eq!(screen.short, None);
         let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Length(Timed::Ceiling, Duration::from_secs(7_200)));
+            update(&mut screen, &prefs, Msg::Length(Timed::Ceiling, Duration::from_secs(7_200)));
         assert_eq!(request, Some(Request::Prefs(Prefs { ceiling: 7_200, ..Prefs::default() })));
         let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Length(Timed::DefaultGoal, Duration::from_secs(1_800)));
+            update(&mut screen, &prefs, Msg::Length(Timed::DefaultGoal, Duration::from_secs(1_800)));
         assert_eq!(request, Some(Request::Prefs(Prefs { default_goal: 1_800, ..Prefs::default() })));
     }
 
@@ -594,13 +598,12 @@ mod tests {
         let mut screen = Settings::new(Vec::new());
         let prefs = Prefs::default();
         let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Shared(Shared::Theme("nordic".to_owned())));
+            update(&mut screen, &prefs, Msg::Shared(Shared::Theme("nordic".to_owned())));
         assert_eq!(request, Some(Request::Shared(Shared::Theme("nordic".to_owned()))));
-        let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Weekday::Monday, Msg::Stored(Err("disk full".to_owned())));
+        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::Stored(Err("disk full".to_owned())));
         assert_eq!(request, None);
         assert_eq!(screen.failure(), Some("disk full"));
-        let _: (Command<Msg>, _) = update(&mut screen, &prefs, Weekday::Monday, Msg::Stored(Ok(())));
+        let _: (Command<Msg>, _) = update(&mut screen, &prefs, Msg::Stored(Ok(())));
         assert_eq!(screen.failure(), None);
     }
 }

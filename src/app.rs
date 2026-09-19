@@ -5,7 +5,6 @@
 //! to what a screen asks for. The clock is read through one function handed in at the start, so
 //! a test can hand in a clock of its own and drive the timer without waiting.
 
-use std::cell::Cell;
 use std::io;
 use std::time::Duration;
 
@@ -277,11 +276,6 @@ pub struct QFocus {
     knows_boot: bool,
     /// What the person set about the application.
     prefs: Prefs,
-    /// The day the active language and region start the week on, set at the start of every
-    /// frame so that `update` measures weeks as the screen shows them. The view is the only
-    /// place the translator can be read; a function the framework would give for it anywhere
-    /// would make this unnecessary. Monday until the first frame.
-    language_week_start: Cell<Weekday>,
     /// The settings file, with the framework's keys and qfocus's own.
     settings: Settings,
     page: Page,
@@ -299,8 +293,9 @@ pub struct QFocus {
     quit_asked: bool,
     /// Goals already reached, or said to be, while the counter runs: each is said once.
     goals_said: Vec<Id>,
-    /// The first day of the week `goals_said` was measured with. When the week moves, the
-    /// goals it fills or empties are not crossings and are taken as they stand.
+    /// The first day of the week `goals_said` was measured with. The week moves while a counter
+    /// runs when the person changes the language, the region or the chosen first day; the goals
+    /// that move fills or empties are not crossings and are taken as they stand.
     goals_week: Weekday,
     /// Whether the dashboard stands over the page: no counter runs and nothing was touched for
     /// a while. The page under it keeps its state.
@@ -350,7 +345,6 @@ impl QFocus {
             clock,
             knows_boot: Uptime::detects_suspend(),
             prefs: Prefs::from_settings(&settings),
-            language_week_start: Cell::new(Weekday::Monday),
             settings_screen: SettingsScreen::new(settings.diagnostics().to_vec()),
             settings,
             page: Page::Today,
@@ -441,7 +435,7 @@ impl QFocus {
 
     /// The day the week starts on: the chosen one, or the active language's and region's.
     fn week_start(&self) -> Weekday {
-        self.prefs.week_starts_on(self.language_week_start.get())
+        self.prefs.week_starts_on(qframe::i18n::first_weekday())
     }
 
     /// The settings file as it stands in memory.
@@ -914,8 +908,7 @@ impl QFocus {
 
     /// Applies a message of the Settings screen and does what it asks.
     fn settings_message(&mut self, message: settings::Msg) -> Command<Msg> {
-        let (command, request) =
-            settings::update(&mut self.settings_screen, &self.prefs, self.language_week_start.get(), message);
+        let (command, request) = settings::update(&mut self.settings_screen, &self.prefs, message);
         match request {
             Some(settings::Request::Shared(change)) => {
                 match change {
@@ -1621,7 +1614,6 @@ impl App for QFocus {
     }
 
     fn view(&self, ui: &mut View<'_, Msg>) {
-        self.language_week_start.set(ui.env().i18n().first_weekday());
         // The watches live here, not on the screens: the counter runs on whichever page is open,
         // and a watch is only answered while the frame declares it. With a counter the silence
         // is the work's concern and, later, the screen's; without one it is the dashboard's.
@@ -2321,9 +2313,8 @@ mod tests {
     }
 
     /// Every language at forty columns: no key without text, no mark the aesthetics forbid, no
-    /// wide character broken, and no text cut short. Two cuts are let through by name: a person's
-    /// own focus or category name in a table column, which cannot wrap, and the one place the
-    /// framework still cuts (see `may_be_cut`).
+    /// wide character broken, and no text cut short. One cut is let through by name: a person's
+    /// own focus or category name in a table column, which cannot wrap (see `may_be_cut`).
     ///
     /// `QFOCUS_TOUR=<code>` prints that language's screens, for reading a translation where it
     /// is shown.
@@ -2341,7 +2332,7 @@ mod tests {
                 assert_eq!(forbidden(&screen), None, "{code} · {name}\n{screen}");
                 assert_eq!(broken_wide_cell(h), None, "{code} · {name}\n{screen}");
                 for cut in cut_texts(&screen) {
-                    assert!(may_be_cut(&cut, name, h), "{code} · {name}: \"{cut}…\" is cut short\n{screen}");
+                    assert!(may_be_cut(&cut, h), "{code} · {name}: \"{cut}…\" is cut short\n{screen}");
                 }
             });
         }
@@ -2360,19 +2351,14 @@ mod tests {
             .collect()
     }
 
-    /// Whether the text left as `cut` on the screen `name` may stand cut short: a person's own
-    /// name in a table column, which cannot wrap, or a place the framework still cuts.
-    fn may_be_cut(cut: &str, name: &str, h: &Harness<QFocus>) -> bool {
+    /// Whether the text left as `cut` may stand cut short: a person's own name in a table
+    /// column, which cannot wrap.
+    fn may_be_cut(cut: &str, h: &Harness<QFocus>) -> bool {
         let tree = &h.app().store().tree;
         let names =
             tree.categories.iter().flat_map(|c| std::iter::once(&c.name).chain(c.focuses.iter().map(|f| &f.name)));
         let own_name = names.into_iter().any(|full| full.len() > cut.len() && full.starts_with(cut));
-        // Framework request 29: a form field keeps its label beside a text input too narrow for
-        // the input's placeholder, so the note's placeholder is cut in every language.
-        let placeholder = name == "record form"
-            && !cut.is_empty()
-            && h.env().i18n().translate("form.note-placeholder", &[]).starts_with(cut);
-        (own_name && !cut.is_empty()) || placeholder
+        own_name && !cut.is_empty()
     }
 
     /// The charts over `dir`, the week pinned to Monday so the drawings do not move with the
@@ -3077,7 +3063,9 @@ mod tests {
         let (_, focus) = seeded(&dir);
         // Fifty minutes on Sunday and an hour on the counter left running: a hundred minutes of
         // a week goal of a hundred where the week starts on Sunday, sixty where it starts on
-        // Monday, the day the counter is taken over with before the first frame.
+        // Monday. The counter is taken over under the machine's language and region, measured
+        // over a Monday week in Britain, then the region moves to the United States while it
+        // runs: the goal that move fills is not a crossing.
         recorded(&dir, 30, focus, 5 * 86_400, vec![Span::new(SpanKind::Work, 0, 3_000, ClockSource::Mono)], "");
         let store = Store::open(Paths::at(&dir, "test"));
         let mut tree = store.tree.clone();
@@ -3088,11 +3076,15 @@ mod tests {
         let clock = FakeClock::new();
         let prefs = Prefs { stop_at_goal: true, ..Prefs::default() };
         let mut h = harness(app_with(&dir, &clock, &prefs).knows_boot(true), 80, 24);
-        h.set_locale("tr").set_region(Some("US"));
+        h.set_locale("tr").set_region(Some("GB"));
         assert!(h.app().timer().is_some(), "{}", h.screen());
+        clock.pass(1);
+        h.advance(Duration::from_secs(1));
+        assert!(h.app().timer().is_some(), "sixty-one minutes of a hundred:\n{}", h.screen());
+        h.set_region(Some("US"));
         clock.pass(60);
         h.advance(Duration::from_secs(1));
-        assert!(h.app().timer().is_some(), "the goal was full before, so nothing stops:\n{}", h.screen());
+        assert!(h.app().timer().is_some(), "the new week filled the goal, so nothing stops:\n{}", h.screen());
         h.press("space");
         done(&dir);
     }
