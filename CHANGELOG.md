@@ -2,6 +2,16 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.9 - 2026-09-20
+
+### Added
+
+- A card for when a link to qfocus is shared: the week's bars, the name and the one sentence the README opens with, on the ground of qfocus's own theme, instead of an empty grey box.
+
+### Fixed
+
+- The moving picture in the README lasts exactly as long as its story: its last frame no longer rests twice as long as the others, so a looping picture starts again on time.
+
 ## 0.1.8 - 2026-09-20
 
 ### Changed
