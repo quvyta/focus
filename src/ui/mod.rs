@@ -35,6 +35,37 @@ pub fn info_line<M: 'static>(text: impl Into<String>, ui: &mut View<'_, M>) {
         .fill_width();
 }
 
+/// How many buttons stand in each row of a strip that must not lose any of them.
+///
+/// A button is measured while its row is laid out, which is after the rows have to be chosen, so
+/// the width is worked out here from what a button is made of: four cells of padding around the
+/// label, and three more plus the key itself for the segment that carries the key. Neighbours
+/// stand two cells apart. Each `(label, key)` is taken in order and opens a new row as soon as it
+/// would not fit; a button without a key passes an empty one.
+///
+/// A row that is one cell too wide does not shrink: the framework cuts the last label off and
+/// leaves its key standing alone, which says nothing.
+#[must_use]
+pub fn button_rows(width: u16, buttons: &[(&str, &str)]) -> Vec<usize> {
+    let mut rows: Vec<usize> = Vec::new();
+    let mut used = 0_u32;
+    for (label, key) in buttons {
+        let key_cells = if key.is_empty() { 0 } else { u32::from(qframe::text::width(key)) + 3 };
+        let cells = u32::from(qframe::text::width(label)) + 4 + key_cells;
+        match rows.last_mut() {
+            Some(count) if used + 2 + cells <= u32::from(width) => {
+                *count += 1;
+                used += 2 + cells;
+            }
+            _ => {
+                rows.push(1);
+                used = cells;
+            }
+        }
+    }
+    rows
+}
+
 /// `seconds` as "how long ago", in the largest unit that fits: seconds, minutes, hours or days.
 #[must_use]
 pub fn ago(seconds: u64) -> String {
@@ -152,4 +183,34 @@ pub fn goal_gauges<M: 'static>(rows: &[GoalRow], units: &Units<'_>, ui: &mut Vie
         }
     })
     .fill_width();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::button_rows;
+
+    #[test]
+    fn a_strip_of_buttons_keeps_one_row_while_the_words_leave_room() {
+        // The counter's three buttons in English, then in French, at forty columns: "Reprendre"
+        // is what tips them over, and one word longer must cost a row, not the last label.
+        assert_eq!(button_rows(40, &[("Stop", ""), ("Break", "p"), ("Note", "n")]), vec![3]);
+        assert_eq!(button_rows(40, &[("Arrêter", ""), ("Pause", "p"), ("Note", "n")]), vec![3]);
+        assert_eq!(button_rows(40, &[("Arrêter", ""), ("Reprendre", "p"), ("Note", "n")]), vec![2, 1]);
+    }
+
+    #[test]
+    fn a_strip_too_wide_for_the_terminal_flows_on() {
+        let records = [("Add by hand", "a"), ("Correct", "f2"), ("Spans", "s"), ("Remove", "delete"), ("Export", "e")];
+        assert_eq!(button_rows(40, &records), vec![2, 2, 1]);
+        assert_eq!(button_rows(64, &records), vec![3, 2]);
+        assert_eq!(button_rows(89, &records), vec![5], "the whole strip needs eighty-nine cells");
+        assert_eq!(button_rows(88, &records), vec![4, 1]);
+    }
+
+    #[test]
+    fn a_wide_glyph_counts_for_two_cells() {
+        // Japanese labels are half as many characters and just as many cells.
+        assert_eq!(button_rows(22, &[("停止", ""), ("休憩", "p")]), vec![2]);
+        assert_eq!(button_rows(21, &[("停止", ""), ("休憩", "p")]), vec![1, 1]);
+    }
 }

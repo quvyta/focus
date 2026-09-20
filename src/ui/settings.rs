@@ -16,11 +16,10 @@ use std::time::Duration;
 
 use qframe::date::{Date, TimeOfDay};
 use qframe::diagnostics::{Diagnostic, Severity};
-use qframe::icons::{IconMode, PillarStyle};
 use qframe::prelude::*;
 use qframe::widgets::{
-    DatePicker, DurationInput, HoldToConfirm, ScrollView, Segmented, Select, SettingRow, SettingsList, Switch,
-    TimeInput,
+    Appearance, AppearanceChange, DatePicker, DurationInput, HoldToConfirm, ScrollView, Select, SettingRow,
+    SettingsList, Switch, TimeInput,
 };
 
 use super::warning_line;
@@ -79,26 +78,11 @@ impl Timed {
     }
 }
 
-/// A change to what the framework keeps for every application.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Shared {
-    /// The language, by code.
-    Language(String),
-    /// The theme, by id.
-    Theme(String),
-    /// The icon mode.
-    Icons(IconMode),
-    /// Reduced motion.
-    ReducedMotion(bool),
-    /// The pillar style.
-    Pillar(PillarStyle),
-}
-
 /// Something that happened on the screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
-    /// A shared setting was chosen.
-    Shared(Shared),
+    /// An appearance row of the family's own section was changed.
+    Appearance(AppearanceChange),
     /// The day the week starts on was chosen, by position among the weekdays.
     WeekStart(usize),
     /// The hour the day turns at was set.
@@ -132,8 +116,8 @@ pub enum Msg {
 /// What the screen asks the application for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
-    /// Store a shared setting; the screen has already applied it.
-    Shared(Shared),
+    /// Apply and save an appearance change; only the application holds the rows' state.
+    Appearance(AppearanceChange),
     /// Use and store these preferences.
     Prefs(Prefs),
     /// Move every session to the trash.
@@ -210,16 +194,9 @@ pub fn update<M: From<Msg> + Clone + Send + 'static>(
     msg: Msg,
 ) -> (Command<M>, Option<Request>) {
     match msg {
-        Msg::Shared(change) => {
-            let command = match &change {
-                Shared::Language(code) => Command::set_locale(code.clone()),
-                Shared::Theme(id) => Command::set_theme(id.clone()),
-                Shared::Icons(mode) => Command::set_icon_mode(*mode),
-                Shared::ReducedMotion(reduced) => Command::set_reduced_motion(*reduced),
-                Shared::Pillar(style) => Command::set_pillar(*style),
-            };
-            (command, Some(Request::Shared(change)))
-        }
+        // The rows themselves live in the framework's `Appearance`, which the application holds:
+        // it applies the change and saves it, so the screen only passes it on.
+        Msg::Appearance(change) => (Command::none(), Some(Request::Appearance(change))),
         Msg::WeekStart(index) => match WEEKDAYS.get(index) {
             // The language's and region's own first day is not pinned, so the week keeps
             // following them when they change.
@@ -273,36 +250,20 @@ pub fn update<M: From<Msg> + Clone + Send + 'static>(
     }
 }
 
-/// The line under the reduce-motion row while the shell decides it: which value is in force and
-/// that the shell chose it, so the switch does not simply refuse to move.
-fn motion_note(forced: bool, reduced: bool) -> String {
-    match (forced, reduced) {
-        (true, true) => t!("settings.forced-on"),
-        (true, false) => t!("settings.forced-off"),
-        (false, _) => t!("settings.reduce-motion-text"),
-    }
-}
-
 /// Draws the screen: the repairs until read, the last failure, the list of settings and, under
 /// it, the danger actions with their marks. `today` is the local day, where the older records'
-/// date starts from. `can_edit` false mutes the actions, for an instance that may not write.
+/// date starts from. `appearance` draws the rows the whole family shares. `can_edit` false mutes
+/// the actions, for an instance that may not write.
 pub fn view<M: From<Msg> + Clone + Send + 'static>(
     screen: &Settings,
     prefs: &Prefs,
+    appearance: &Appearance,
     today: Date,
     units: &Units<'_>,
     can_edit: bool,
     ui: &mut View<'_, M>,
 ) {
-    let languages = ui.env().i18n().list();
-    let language = ui.env().i18n().active().to_owned();
     let week_start = prefs.week_starts_on(ui.env().i18n().first_weekday());
-    let themes = ui.env().themes();
-    let theme = ui.env().theme().id().to_owned();
-    let icons = ui.env().icon_mode();
-    let reduced = ui.env().reduced_motion();
-    let forced = ui.env().reduced_motion_forced();
-    let pillar = ui.env().pillar_style().unwrap_or(PillarStyle::Thick);
     let warning = ui.env().icons().glyph("warning").into_owned();
 
     ui.add_with(ScrollView::new(), |ui| {
@@ -317,58 +278,10 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
                 warning_line(t!("settings.store-failed", reason = reason.clone()), ui);
             }
             let list = SettingsList::show(ui, |list| {
-                list.heading(t!("settings.appearance"));
-                let codes: Vec<String> = languages.iter().map(|(code, _)| code.clone()).collect();
-                let names: Vec<String> = languages.iter().map(|(_, name)| name.clone()).collect();
-                let chosen = codes.iter().position(|code| *code == language);
-                list.row(SettingRow::new(t!("settings.language")), |ui| {
-                    ui.add(
-                        Select::new(names)
-                            .selected(chosen)
-                            .on_select(move |index| M::from(Msg::Shared(Shared::Language(codes[index].clone())))),
-                    )
-                    .width(Length::Cells(CONTROL_WIDTH));
-                });
-                let ids: Vec<String> = themes.iter().map(|(id, _)| id.clone()).collect();
-                let titles: Vec<String> = themes.iter().map(|(_, name)| name.clone()).collect();
-                let chosen = ids.iter().position(|id| *id == theme);
-                list.row(SettingRow::new(t!("settings.theme")), |ui| {
-                    ui.add(
-                        Select::new(titles)
-                            .selected(chosen)
-                            .on_select(move |index| M::from(Msg::Shared(Shared::Theme(ids[index].clone())))),
-                    )
-                    .width(Length::Cells(CONTROL_WIDTH));
-                });
-                let modes = IconMode::ALL.map(|mode| t!(&format!("settings.icons-{}", mode.name())));
-                let chosen = IconMode::ALL.iter().position(|mode| *mode == icons);
-                list.row(SettingRow::new(t!("settings.icons")), |ui| {
-                    ui.add(
-                        Select::new(modes)
-                            .selected(chosen)
-                            .on_select(|index| M::from(Msg::Shared(Shared::Icons(IconMode::ALL[index])))),
-                    )
-                    .width(Length::Cells(CONTROL_WIDTH));
-                });
-                let row = SettingRow::new(t!("settings.reduce-motion"))
-                    .description(motion_note(forced, reduced))
-                    .disabled(forced);
-                list.row(row, |ui| {
-                    ui.add(
-                        Switch::new(reduced)
-                            .disabled(forced)
-                            .on_toggle(|on| M::from(Msg::Shared(Shared::ReducedMotion(on)))),
-                    );
-                });
-                let styles = PillarStyle::ALL.map(|style| t!(&format!("settings.pillar-{}", style.name())));
-                let chosen = PillarStyle::ALL.iter().position(|style| *style == pillar).unwrap_or(0);
-                list.row(SettingRow::new(t!("settings.pillar")), |ui| {
-                    ui.add(
-                        Segmented::new(styles)
-                            .selected(chosen)
-                            .on_select(|index| M::from(Msg::Shared(Shared::Pillar(PillarStyle::ALL[index])))),
-                    );
-                });
+                // Language, theme, icons, motion and the pillar are the family's own section:
+                // every Quvyta application shows the same rows, and each shared row carries the
+                // choice of changing it everywhere or here only.
+                appearance.section(list, |change| M::from(Msg::Appearance(change)));
 
                 list.heading(t!("settings.time"));
                 let days = WEEKDAYS.map(|(day, _)| t!(&format!("days.{}", day.number())));
@@ -594,12 +507,12 @@ mod tests {
     }
 
     #[test]
-    fn shared_changes_apply_at_once_and_ask_to_be_stored() {
+    fn an_appearance_change_is_passed_on_and_a_failed_write_is_shown() {
         let mut screen = Settings::new(Vec::new());
         let prefs = Prefs::default();
-        let (_, request): (Command<Msg>, _) =
-            update(&mut screen, &prefs, Msg::Shared(Shared::Theme("nordic".to_owned())));
-        assert_eq!(request, Some(Request::Shared(Shared::Theme("nordic".to_owned()))));
+        let change = AppearanceChange::Theme("nordic".to_owned());
+        let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::Appearance(change.clone()));
+        assert_eq!(request, Some(Request::Appearance(change)));
         let (_, request): (Command<Msg>, _) = update(&mut screen, &prefs, Msg::Stored(Err("disk full".to_owned())));
         assert_eq!(request, None);
         assert_eq!(screen.failure(), Some("disk full"));

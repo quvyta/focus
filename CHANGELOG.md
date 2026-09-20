@@ -2,6 +2,17 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.8 - 2026-09-20
+
+### Changed
+
+- The language, the theme and the icons are now the family's: each of these rows carries a box, "In every Quvyta application", checked while qfocus follows the family. Checked, the choice goes to `quvyta.conf` beside the settings and every Quvyta application that follows it changes too; cleared, it stays in qfocus's own file. Reduced motion and the pillar stay qfocus's own. Nothing has to be done to an existing settings file: a value already in it keeps qfocus on it until the box is checked again.
+
+### Fixed
+
+- A row of buttons too wide for the window now flows onto more rows instead of losing its last button. In the records footer some buttons could not be reached with the mouse at all at several widths.
+- Wording read through in every language: Turkish and Russian had a handful of wrong or inconsistent words, German durations now read Std/Min beside the framework's own, Spanish, French and Portuguese say that a record is added by hand, and a Japanese particle lost its space. Russian weekday names are lowercase, as the language writes them.
+
 ## 0.1.7 - 2026-09-20
 
 ### Changed

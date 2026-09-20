@@ -607,37 +607,34 @@ fn list<M: From<Msg> + Clone + Send + 'static>(
     let rows = screen.sessions(sessions, &store.voided, &store.tree);
     session_table(screen, &rows, &store.tree, units, t!("records.no-match"), ui);
     let none = screen.selected.is_none_or(|index| index >= rows.len());
-    // Five buttons fit in one row down to the width the source column needs; below it they
-    // stand in two, so none is cut off.
-    let narrow = ui.size().width < SOURCE_BELOW;
+    // The five buttons take as many rows as the width and the language's own words need: a row
+    // that is a cell too wide would cut the last label off and leave its key standing alone.
+    let labels =
+        [t!("records.add"), t!("records.correct"), t!("records.spans"), t!("records.delete"), t!("records.export")];
+    let keys = ["a", "f2", "s", "delete", "e"];
+    let measured: Vec<(&str, &str)> = labels.iter().map(String::as_str).zip(keys).collect();
+    let mut made = 0_usize;
     ui.column(|ui| {
-        ui.row(|ui| {
-            ui.add(Button::new(t!("records.add")).shortcut("a").disabled(!can_edit).on_press(M::from(Msg::Add)));
-            ui.add(
-                Button::new(t!("records.correct"))
-                    .shortcut("f2")
-                    .disabled(!can_edit || none)
-                    .on_press(M::from(Msg::Correct)),
-            );
-            ui.add(Button::new(t!("records.spans")).shortcut("s").disabled(none).on_press(M::from(Msg::Spans)));
-            if !narrow {
-                removal_buttons(can_edit, none, ui);
-            }
-        })
-        .gap(2);
-        if narrow {
-            ui.row(|ui| removal_buttons(can_edit, none, ui)).gap(2);
+        for count in super::button_rows(ui.size().width, &measured) {
+            ui.row(|ui| {
+                for _ in 0..count {
+                    let label = labels[made].as_str();
+                    let key = keys[made];
+                    let button = Button::new(label).shortcut(key);
+                    ui.add(match made {
+                        0 => button.disabled(!can_edit).on_press(M::from(Msg::Add)),
+                        1 => button.disabled(!can_edit || none).on_press(M::from(Msg::Correct)),
+                        2 => button.disabled(none).on_press(M::from(Msg::Spans)),
+                        3 => button.disabled(!can_edit || none).on_press(M::from(Msg::Delete)),
+                        _ => button.on_press(M::from(Msg::Export)),
+                    });
+                    made += 1;
+                }
+            })
+            .gap(2);
         }
     })
     .gap(1);
-}
-
-/// The buttons that remove a session and write the export files.
-fn removal_buttons<M: From<Msg> + Clone + Send + 'static>(can_edit: bool, none: bool, ui: &mut View<'_, M>) {
-    ui.add(
-        Button::new(t!("records.delete")).shortcut("delete").disabled(!can_edit || none).on_press(M::from(Msg::Delete)),
-    );
-    ui.add(Button::new(t!("records.export")).shortcut("e").on_press(M::from(Msg::Export)));
 }
 
 /// The trash: removed sessions and the way back.

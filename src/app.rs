@@ -11,9 +11,9 @@ use std::time::Duration;
 use qframe::date::{Date, DateTime, Weekday, local_offset};
 use qframe::prelude::*;
 use qframe::runtime::{Confirm, Task, TaskId, Termination};
-use qframe::storage::{Settings, atomic_write};
+use qframe::storage::{Family, Settings, atomic_write};
 use qframe::uptime::Uptime;
-use qframe::widgets::{Bar, BarChart, BigText, Modal, Span, Toast};
+use qframe::widgets::{Appearance, Bar, BarChart, BigText, Modal, Span, Toast};
 
 use crate::clock;
 use crate::day::{DayTotals, totals};
@@ -87,9 +87,14 @@ pub fn run() -> io::Result<()> {
             (Store::open_read_only(Paths::at(nowhere, machine_name())), false)
         }
     };
-    let app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone())
+    // The shared look is resolved before the first frame, so the family's language and theme are
+    // in force from the start; the rows on the Settings page write it back.
+    let preferences = crate::config::preferences();
+    let appearance = Appearance::new(Family::QUVYTA, crate::config::APP, preferences.clone());
+    let app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone(), appearance)
         .with_left_behind(left_behind);
-    let mut runtime = Runtime::new(app).settings(&settings).keymap_source("keymap.toml", KEYMAP);
+    let mut runtime =
+        Runtime::new(app).settings(&settings).preferences(&preferences).keymap_source("keymap.toml", KEYMAP);
     for &(file, text) in crate::locales() {
         runtime = runtime.locale_source(file, text);
     }
@@ -278,6 +283,8 @@ pub struct QFocus {
     prefs: Prefs,
     /// The settings file, with the framework's keys and qfocus's own.
     settings: Settings,
+    /// The rows every application of the family shows for its look, and what they write.
+    appearance: Appearance,
     page: Page,
     today: Today,
     charts: Charts,
@@ -325,8 +332,9 @@ impl QFocus {
     }
 
     /// The application over `store`. `on_disk` says whether the store is a real folder, `offset`
-    /// is the local time zone if known, `clock` reads the clocks and `settings` is the settings
-    /// file, from which the preferences are read.
+    /// is the local time zone if known, `clock` reads the clocks, `settings` is the settings
+    /// file, from which the preferences are read, and `appearance` holds the family's shared look
+    /// and writes a change to it.
     ///
     /// A running file the last run left is not looked at here but in [`App::init`], where the
     /// runtime opens the recovery dialog before the first frame.
@@ -337,6 +345,7 @@ impl QFocus {
         offset: Option<i16>,
         clock: Box<dyn Fn() -> Clocks>,
         settings: Settings,
+        appearance: Appearance,
     ) -> Self {
         let mut app = Self {
             store,
@@ -347,6 +356,7 @@ impl QFocus {
             prefs: Prefs::from_settings(&settings),
             settings_screen: SettingsScreen::new(settings.diagnostics().to_vec()),
             settings,
+            appearance,
             page: Page::Today,
             today: Today::new(),
             charts: Charts::new(),
@@ -910,15 +920,10 @@ impl QFocus {
     fn settings_message(&mut self, message: settings::Msg) -> Command<Msg> {
         let (command, request) = settings::update(&mut self.settings_screen, &self.prefs, message);
         match request {
-            Some(settings::Request::Shared(change)) => {
-                match change {
-                    settings::Shared::Language(code) => self.settings.set(Settings::LANGUAGE, code),
-                    settings::Shared::Theme(id) => self.settings.set(Settings::THEME, id),
-                    settings::Shared::Icons(mode) => self.settings.set(Settings::ICONS, mode.name().to_owned()),
-                    settings::Shared::ReducedMotion(reduced) => self.settings.set(Settings::REDUCED_MOTION, reduced),
-                    settings::Shared::Pillar(style) => self.settings.set(Settings::PILLAR, style.name().to_owned()),
-                };
-                Command::batch([command, self.save_settings()])
+            // The appearance writes its own files, key by key, and keeps the settings qfocus
+            // holds in step, so nothing more is saved here.
+            Some(settings::Request::Appearance(change)) => {
+                Command::batch([command, self.appearance.update(change, &mut self.settings)])
             }
             Some(settings::Request::Prefs(prefs)) => {
                 self.prefs = prefs;
@@ -1905,7 +1910,15 @@ impl QFocus {
                 records::view(&self.records, &self.sessions, &self.store, &units().as_units(), self.can_edit(), ui);
             }
             (Page::Settings, _) => {
-                settings::view(&self.settings_screen, &self.prefs, self.date, &units().as_units(), self.can_edit(), ui);
+                settings::view(
+                    &self.settings_screen,
+                    &self.prefs,
+                    &self.appearance,
+                    self.date,
+                    &units().as_units(),
+                    self.can_edit(),
+                    ui,
+                );
             }
         }
     }
@@ -2068,14 +2081,26 @@ mod tests {
     }
 
     fn app_at(dir: &Path, clock: &FakeClock) -> QFocus {
-        QFocus::new(Store::open(Paths::at(dir, "test")), true, Some(180), clock.reader(), Settings::in_memory())
+        QFocus::new(
+            Store::open(Paths::at(dir, "test")),
+            true,
+            Some(180),
+            clock.reader(),
+            Settings::in_memory(),
+            appearance(dir),
+        )
+    }
+
+    /// The family's appearance over `dir`: a test never reads or writes the person's own settings.
+    fn appearance(dir: &Path) -> Appearance {
+        Appearance::new(Family::QUVYTA, crate::config::APP, crate::config::preferences_in(dir)).in_folder(dir)
     }
 
     /// The application over `dir` with `prefs` in force, as a settings file would give them.
     fn app_with(dir: &Path, clock: &FakeClock, prefs: &Prefs) -> QFocus {
         let mut settings = Settings::in_memory();
         prefs.write(&mut settings);
-        QFocus::new(Store::open(Paths::at(dir, "test")), true, Some(180), clock.reader(), settings)
+        QFocus::new(Store::open(Paths::at(dir, "test")), true, Some(180), clock.reader(), settings, appearance(dir))
     }
 
     fn seeded(dir: &Path) -> (Id, Id) {
@@ -3618,7 +3643,11 @@ mod tests {
         let dir = temp("memory");
         let clock = FakeClock::new();
         let store = Store::open_read_only(Paths::at(&dir, "test"));
-        let mut h = harness(QFocus::new(store, false, None, clock.reader(), Settings::in_memory()), 80, 20);
+        // The settings live apart from the records here: the data folder must stay untouched, and
+        // the appearance writes its own files where it is told to.
+        let settings_dir = temp("memory-settings");
+        let app = QFocus::new(store, false, None, clock.reader(), Settings::in_memory(), appearance(&settings_dir));
+        let mut h = harness(app, 80, 20);
         let screen = h.screen();
         assert!(screen.contains("stays in memory"), "{screen}");
         assert!(screen.contains("time zone is unknown"), "{screen}");
@@ -3632,6 +3661,7 @@ mod tests {
         assert_eq!(h.app().pending().len(), 1);
         assert!(h.screen().contains("1 min"), "{}", h.screen());
         assert!(!dir.exists());
+        done(&settings_dir);
     }
 
     #[test]
@@ -4402,8 +4432,18 @@ mod tests {
     fn app_on_file(dir: &Path, clock: &FakeClock) -> (QFocus, PathBuf) {
         let path = dir.join("focus.conf");
         fs::create_dir_all(dir).expect("folder");
-        let settings = Settings::open(&path).schema(Prefs::schema()).self_heal(true);
-        (QFocus::new(Store::open(Paths::at(dir, "test")), true, Some(180), clock.reader(), settings), path)
+        let settings = Settings::open(&path).member_of(&Family::QUVYTA).schema(Prefs::schema()).self_heal(true);
+        (
+            QFocus::new(
+                Store::open(Paths::at(dir, "test")),
+                true,
+                Some(180),
+                clock.reader(),
+                settings,
+                appearance(dir),
+            ),
+            path,
+        )
     }
 
     /// Holds the left button on the control whose label starts with `text` until it confirms.
@@ -4489,8 +4529,9 @@ mod tests {
         let clock = FakeClock::new();
         let mut h = harness(app_at(&dir, &clock), 80, 40);
         h.press("4");
-        // Reduce motion is the fourth row; the stop-at-goal switch is the ninth.
-        for _ in 0..3 {
+        // Reduce motion is the seventh row, under the three shared rows and the box each of them
+        // carries; the stop-at-goal switch is six rows below it.
+        for _ in 0..6 {
             h.press("down");
         }
         // The harness runs with reduced motion on, so the first press turns it off.
@@ -4555,19 +4596,56 @@ mod tests {
         let screen = h.screen();
         let labels = screen.lines().find(|line| line.contains("Sun")).unwrap_or_default();
         assert!(labels.trim_start().starts_with("Sat"), "the week now runs from Saturday:\n{screen}");
-        // A shared setting is applied at once and written under the framework's key.
-        h.send(Msg::Settings(settings::Msg::Shared(settings::Shared::Language("tr".to_owned()))));
+        // A shared setting is applied at once and, since the box under the row is checked, written
+        // in the family's file; qfocus's own file says it follows the family.
+        let change = qframe::widgets::AppearanceChange::Language("tr".to_owned());
+        h.send(Msg::Settings(settings::Msg::Appearance(change)));
         h.advance(Duration::from_millis(100));
         assert!(h.screen().contains("Grafikler"), "{}", h.screen());
         let written = fs::read_to_string(&path).expect("settings written");
-        assert!(written.contains("language = \"tr\""), "{written}");
+        assert!(written.contains("language = \"quvyta\""), "{written}");
         assert!(written.contains("week-start = \"saturday\""), "{written}");
+        let shared = fs::read_to_string(dir.join("quvyta.conf")).expect("the family's file");
+        assert!(shared.contains("language = \"tr\""), "{shared}");
         // Choosing the language's own first day unpins the week again.
         h.send(Msg::Settings(settings::Msg::WeekStart(0)));
         h.advance(Duration::from_millis(100));
         assert_eq!(h.app().prefs().week_start, None, "Monday is where a Turkish week starts anyway");
         let written = fs::read_to_string(&path).expect("settings written");
         assert!(!written.contains("week-start"), "{written}");
+        done(&dir);
+    }
+
+    #[test]
+    fn the_look_goes_to_the_family_while_the_box_is_checked_and_to_qfocus_alone_once_it_is_cleared() {
+        use qframe::storage::Shared;
+        use qframe::widgets::AppearanceChange;
+
+        let dir = temp("appearance-scope");
+        seeded(&dir);
+        let clock = FakeClock::new();
+        let (app, path) = app_on_file(&dir, &clock);
+        let mut h = harness(app, 100, 40);
+        h.press("4");
+        let screen = h.screen();
+        assert!(screen.contains("In every Quvyta application"), "{screen}");
+        let shared = dir.join("quvyta.conf");
+
+        // The box is checked on a fresh machine, so the theme goes to the family and qfocus's own
+        // file says it follows.
+        h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Theme("nordic".to_owned()))));
+        assert_eq!(h.env().theme().id(), "nordic", "{}", h.screen());
+        assert!(fs::read_to_string(&shared).expect("the family's file").contains("theme = \"nordic\""));
+        assert!(fs::read_to_string(&path).expect("qfocus's file").contains("theme = \"quvyta\""));
+
+        // With the box cleared the next theme stays here; the family keeps the one it had.
+        h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Everywhere(Shared::Theme, false))));
+        h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Theme("amber".to_owned()))));
+        assert_eq!(h.env().theme().id(), "amber", "{}", h.screen());
+        let written = fs::read_to_string(&path).expect("qfocus's file");
+        assert!(written.contains("theme = \"amber\""), "{written}");
+        let family = fs::read_to_string(&shared).expect("the family's file");
+        assert!(family.contains("theme = \"nordic\""), "{family}");
         done(&dir);
     }
 
@@ -4797,7 +4875,7 @@ mod tests {
         assert!(screen.contains("Onaylamak için sil yaz"), "{screen}");
         assert_eq!(forbidden(&screen), None, "{screen}");
         h.press("esc");
-        assert!(h.screen().contains("Boşaltma iptal edildi."), "{}", h.screen());
+        assert!(h.screen().contains("Çöpü boşaltmaktan vazgeçildi."), "{}", h.screen());
         assert_eq!(h.app().store().voided.len(), 2);
         // The soft deletion can still be taken back.
         h.press("ctrl+z");

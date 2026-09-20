@@ -4,9 +4,14 @@
 //!
 //! ```text
 //! ~/.config/quvyta/
+//!     quvyta.conf     the language, theme and icons the family shares
 //!     focus.conf      qfocus's settings
 //!     focus/          its other configuration files
 //! ```
+//!
+//! The language, the theme and the icons belong to the whole family: `focus.conf` either names
+//! qfocus's own value or `"quvyta"`, which means "follow `quvyta.conf`". [`preferences`] resolves
+//! them before the runtime starts, so the first frame is already in the right language.
 //!
 //! Earlier versions kept `settings.toml` inside `focus/`. That file is moved once, at start,
 //! before the settings are read; a file that cannot be moved without overwriting something stays
@@ -16,7 +21,8 @@ use std::fs;
 use std::path::Path;
 
 use qframe::diagnostics::Diagnostic;
-use qframe::storage::{Family, Settings, config_dir};
+use qframe::i18n::I18n;
+use qframe::storage::{Family, Preferences, Settings, config_dir};
 
 use crate::prefs::Prefs;
 
@@ -63,6 +69,30 @@ pub fn load_in(folder: &Path, legacy: &Path) -> Loaded {
     Loaded { settings: checked(Settings::open(folder.join(format!("{APP}.conf")))), left_behind }
 }
 
+/// The language, theme and icons as qfocus sees them: its own when its file names one, else the
+/// family's, else what this machine asks for.
+#[must_use]
+pub fn preferences() -> Preferences {
+    Family::QUVYTA.preferences(APP, &spoken())
+}
+
+/// [`preferences`] with `folder` as the family's folder, so a test never touches the user's own
+/// settings.
+#[must_use]
+pub fn preferences_in(folder: &Path) -> Preferences {
+    Family::QUVYTA.preferences_in(folder, APP, &spoken())
+}
+
+/// The languages qfocus speaks, for choosing the machine's one before the runtime is built: a
+/// language the application does not carry is no use to it.
+fn spoken() -> I18n {
+    let mut i18n = I18n::builtin();
+    for &(file, text) in crate::locales() {
+        i18n.add_source(file, text);
+    }
+    i18n
+}
+
 /// Moves the old settings into the family's layout and returns what stayed behind.
 ///
 /// Only an old settings file is a reason to look. Where the old folder and `focus/` are one
@@ -76,9 +106,11 @@ fn adopt(folder: &Path, legacy: &Path) -> Vec<Diagnostic> {
     Family::QUVYTA.adopt_in(folder, APP, legacy).diagnostics().to_vec()
 }
 
-/// `settings` checked against qfocus's keys and healed.
+/// `settings` checked against qfocus's keys and healed. Being a member of the family makes
+/// `"quvyta"` a valid value of the shared keys, so healing does not throw away a file that says
+/// qfocus follows the family.
 fn checked(settings: Settings) -> Settings {
-    settings.schema(Prefs::schema()).self_heal(true)
+    settings.member_of(&Family::QUVYTA).schema(Prefs::schema()).self_heal(true)
 }
 
 #[cfg(test)]

@@ -463,17 +463,41 @@ fn idle_question<M: From<Msg> + Clone + Send + 'static>(screen: &Screen, units: 
     });
 }
 
-/// The three buttons: stop, break or resume, note. They fit in one row down to forty columns.
+/// The three buttons: stop, break or resume, note. They stand in one row wherever the language's
+/// own words leave room for all three, and take a second row rather than lose one of them.
 fn buttons<M: From<Msg> + Clone + Send + 'static>(screen: &Screen, paused: bool, ui: &mut View<'_, M>) {
-    ui.row(|ui| {
-        ui.add(Button::new(t!("timer.stop")).on_press(M::from(Msg::Stop))).id(STOP);
-        let pause = if paused { t!("timer.resume") } else { t!("timer.pause") };
-        ui.add(Button::new(pause).shortcut("p").on_press(M::from(Msg::Pause)));
-        ui.add(
-            Button::new(t!("timer.note")).shortcut("n").disabled(screen.is_editing_note()).on_press(M::from(Msg::Note)),
-        );
+    let stop = t!("timer.stop");
+    let pause = if paused { t!("timer.resume") } else { t!("timer.pause") };
+    let note = t!("timer.note");
+    let rows = super::button_rows(ui.size().width, &[(&stop, ""), (&pause, "p"), (&note, "n")]);
+    let mut made = 0_usize;
+    ui.column(|ui| {
+        for count in rows {
+            ui.row(|ui| {
+                for _ in 0..count {
+                    match made {
+                        0 => {
+                            ui.add(Button::new(stop.as_str()).on_press(M::from(Msg::Stop))).id(STOP);
+                        }
+                        1 => {
+                            ui.add(Button::new(pause.as_str()).shortcut("p").on_press(M::from(Msg::Pause)));
+                        }
+                        _ => {
+                            ui.add(
+                                Button::new(note.as_str())
+                                    .shortcut("n")
+                                    .disabled(screen.is_editing_note())
+                                    .on_press(M::from(Msg::Note)),
+                            );
+                        }
+                    }
+                    made += 1;
+                }
+            })
+            .gap(2);
+        }
     })
-    .gap(2);
+    .gap(1);
 }
 
 #[cfg(test)]
