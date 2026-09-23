@@ -265,6 +265,10 @@ weeks-all = "直近 52 週。今日は右端です。"
 weeks-shown = "52 週のうち直近 {shown} 週。今日は右端です。"
 day-of-month = "{month}{day}日"
 
+[wizard]
+step-day = "あなたの一日"
+day-intro = "一日がいつ始まっていつ終わるか、そして何を作業と数えるか。すべてあとから変えられます。"
+
 [settings]
 time = "時間"
 week-start = "週の始まり"

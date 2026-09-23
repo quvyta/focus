@@ -85,7 +85,8 @@ pub fn preferences_in(folder: &Path) -> Preferences {
 
 /// The languages qfocus speaks, for choosing the machine's one before the runtime is built: a
 /// language the application does not carry is no use to it.
-fn spoken() -> I18n {
+#[must_use]
+pub fn spoken() -> I18n {
     let mut i18n = I18n::builtin();
     for &(file, text) in crate::locales() {
         i18n.add_source(file, text);

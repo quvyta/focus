@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use qframe::date::{Date, TimeOfDay};
+use qframe::date::{Date, TimeOfDay, Weekday};
 use qframe::diagnostics::{Diagnostic, Severity};
 use qframe::prelude::*;
 use qframe::widgets::{
@@ -284,18 +284,7 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
                 appearance.section(list, |change| M::from(Msg::Appearance(change)));
 
                 list.heading(t!("settings.time"));
-                let days = WEEKDAYS.map(|(day, _)| t!(&format!("days.{}", day.number())));
-                let chosen = WEEKDAYS.iter().position(|(day, _)| *day == week_start);
-                list.row(SettingRow::new(t!("settings.week-start")), |ui| {
-                    ui.add(Select::new(days).selected(chosen).on_select(|index| M::from(Msg::WeekStart(index))))
-                        .width(Length::Cells(CONTROL_WIDTH));
-                });
-                let row = SettingRow::new(t!("settings.day-rollover")).description(t!("settings.day-rollover-text"));
-                list.row(row, |ui| {
-                    ui.add(TimeInput::new(prefs.rollover).on_change(|time| M::from(Msg::Rollover(time))));
-                });
-                length_row(list, screen, Timed::IdleAfter, prefs.idle_after, units);
-                length_row(list, screen, Timed::Ceiling, Duration::from_secs(u64::from(prefs.ceiling)), units);
+                time_rows(list, screen, prefs, week_start, units);
 
                 list.heading(t!("settings.goals"));
                 let row = SettingRow::new(t!("settings.stop-at-goal")).description(t!("settings.stop-at-goal-text"));
@@ -383,6 +372,32 @@ fn warning_note<M: From<Msg> + Clone + Send + 'static>(warning: &str, text: Stri
     ui.add(Text::rich([Span::new(format!("{warning} ")).color("danger"), Span::new(text)]).role("faint")).fill_width();
 }
 
+/// The four rows of the times that shape the day: the day the week starts on, the hour the day
+/// turns at, the idle threshold and the session ceiling. The Settings page and the first-run
+/// wizard ask for the same four with the same controls and the same floors. `week_start` is the
+/// day in force, the chosen one or the active language's, and `screen` carries a length typed
+/// under its floor so the field keeps it with the reason.
+pub fn time_rows<M: From<Msg> + Clone + Send + 'static>(
+    list: &mut qframe::widgets::SettingsRows<'_, M>,
+    screen: &Settings,
+    prefs: &Prefs,
+    week_start: Weekday,
+    units: &Units<'_>,
+) {
+    let days = WEEKDAYS.map(|(day, _)| t!(&format!("days.{}", day.number())));
+    let chosen = WEEKDAYS.iter().position(|(day, _)| *day == week_start);
+    list.row(SettingRow::new(t!("settings.week-start")), |ui| {
+        ui.add(Select::new(days).selected(chosen).on_select(|index| M::from(Msg::WeekStart(index))))
+            .width(Length::Cells(CONTROL_WIDTH));
+    });
+    let row = SettingRow::new(t!("settings.day-rollover")).description(t!("settings.day-rollover-text"));
+    list.row(row, |ui| {
+        ui.add(TimeInput::new(prefs.rollover).on_change(|time| M::from(Msg::Rollover(time))));
+    });
+    length_row(list, screen, Timed::IdleAfter, prefs.idle_after, units);
+    length_row(list, screen, Timed::Ceiling, Duration::from_secs(u64::from(prefs.ceiling)), units);
+}
+
 /// A row with a length of time: the value in force, or the too-short one being typed, marked
 /// invalid with the floor named under the label.
 fn length_row<M: From<Msg> + Clone + Send + 'static>(
@@ -460,8 +475,6 @@ fn report<M: From<Msg> + Clone + Send + 'static>(which: &Report, lines: &[Diagno
 
 #[cfg(test)]
 mod tests {
-    use qframe::date::Weekday;
-
     use super::*;
 
     #[test]

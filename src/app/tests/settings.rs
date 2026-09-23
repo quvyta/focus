@@ -623,3 +623,39 @@ fn an_instance_that_only_looks_cannot_reset_or_delete() {
     drop(first);
     done(&dir);
 }
+
+#[test]
+fn emptying_the_trash_keeps_the_archived_focus_a_counter_left_behind_still_runs_on() {
+    let dir = temp("purge-keeps-the-counters-focus");
+    let (rust, _, review) = seeded_two(&dir);
+    // Every record of the archived focus is gone from the disk; only the counter still on it says
+    // the person is using it. Emptying the trash must not take the row out from under them.
+    let session = recorded(&dir, 30, rust, 3_600, vec![Span::new(SpanKind::Work, 0, 600, ClockSource::Mono)], "");
+    let mut store = Store::open(Paths::at(&dir, "test"));
+    store.void(session.id, NOON).expect("void");
+    drop(store);
+    super::recover::left_running(&dir, review, NOON - 3_600, Watch::None);
+
+    let clock = FakeClock::new();
+    let mut h = harness(app_at(&dir, &clock), 80, 60);
+    assert!(
+        h.app().timer().is_some_and(|screen| screen.running().focus == review),
+        "the counter left behind carries on:\n{}",
+        h.screen()
+    );
+    h.press("4");
+    h.click_text("Empty the trash");
+    h.advance(Duration::from_millis(200));
+    h.type_text("delete").press("enter");
+
+    let screen = h.screen();
+    assert!(screen.contains("1 archived row kept: records use it."), "{screen}");
+    assert!(
+        h.app().store().tree.focus(review).is_some(),
+        "the focus the counter runs on is still in the tree:\n{screen}"
+    );
+    let saved = fs::read_to_string(h.app().store().paths.tree_file()).expect("tree");
+    assert!(saved.contains("Review"), "and in the file it was written to:\n{saved}");
+    assert!(h.app().timer().is_some(), "the counter itself is untouched:\n{screen}");
+    done(&dir);
+}

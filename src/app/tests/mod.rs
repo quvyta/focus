@@ -13,6 +13,7 @@ mod records;
 mod recover;
 mod settings;
 mod tree;
+mod wizard;
 
 use std::cell::Cell;
 use std::fs;
@@ -232,6 +233,17 @@ fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
         h.hover(0, 0).advance(Duration::from_secs(10));
     };
     let clock = FakeClock::new();
+    // The first screen anyone meets: both steps of the setup wizard, in a root of its own so
+    // nothing of the person's is read or written.
+    let first = temp(&format!("tour-first-{name}"));
+    let mut h = wizard::start(&first, &clock, 40, 30);
+    h.set_locale(code);
+    check("wizard, appearance", &h);
+    h.send(Msg::Setup(qframe::widgets::SetupMsg::Next));
+    check("wizard, the day", &h);
+    settle(&mut h);
+    done(&first);
+
     let empty = temp(&format!("tour-empty-{name}"));
     let mut h = harness(app_at(&empty, &clock), 40, 24);
     h.set_locale(code);

@@ -264,6 +264,10 @@ weeks-all = "Son 52 hafta; bugün sağ uçta."
 weeks-shown = "52 haftanın son {shown} haftası; bugün sağ uçta."
 day-of-month = "{day} {month}"
 
+[wizard]
+step-day = "Günün"
+day-intro = "Günün nerede başlayıp nerede bittiği ve neyin çalışmak sayıldığı. Hepsi sonradan değiştirilebilir."
+
 [settings]
 time = "Zaman"
 week-start = "Hafta başı"

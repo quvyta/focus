@@ -2,6 +2,23 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.10 - 2026-09-23
+
+### Added
+
+- The first start asks before it writes: the language, theme and icons every Quvyta application shares, then when your day starts and ends, when silence stops counting and how long a session may run. Nothing at all is written until you finish, so a first start closed half-way leaves the settings folder as it was and the questions come again. "Start with the defaults" skips them.
+
+### Fixed
+
+- Hours beside a goal are written with the decimal mark of your language: `1,5` in Turkish, German, French and the others that write it so, `1.5` in English.
+- Keys typed faster than the screen redraws all arrive: a name typed at once, or pasted in a terminal without bracketed paste, no longer keeps only its last letter.
+- A button acts only when the click began on it, so the release of the click that opens a page can no longer press a button the new page puts in the same place.
+- The language, theme and icon choices are as wide as their longest name, so `Português (Brasil)` is no longer cut.
+
+### Changed
+
+- Built on quvyta-framework 0.1.18.
+
 ## 0.1.9 - 2026-09-20
 
 ### Added

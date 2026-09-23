@@ -220,3 +220,26 @@ fn a_running_counter_shows_no_dashboard_but_its_screen_quietens_and_wakes() {
     assert!(h.app().timer().is_none());
     done(&dir);
 }
+
+#[test]
+fn a_two_minute_threshold_notices_a_silence_the_default_would_still_be_counting() {
+    let dir = temp("idle-setting");
+    seeded(&dir);
+    let clock = FakeClock::new();
+    // Two minutes instead of the quarter of an hour qfocus starts with.
+    let prefs = Prefs { idle_after: Duration::from_secs(120), ..Prefs::default() };
+    let mut h = harness(app_with(&dir, &clock, &prefs), 80, 20);
+    h.click_text("Rust");
+    clock.pass(60);
+    h.advance(Duration::from_secs(60));
+    h.hover(0, 0);
+    assert!(!h.app().timer().is_some_and(TimerScreen::is_away), "a minute of work is not a silence");
+    clock.pass(120);
+    h.advance(Duration::from_secs(120));
+    assert!(h.app().timer().is_some_and(TimerScreen::is_away), "two minutes of silence is:\n{}", h.screen());
+    let screen = h.screen();
+    assert!(screen.contains("No input for 2 min"), "{screen}");
+    assert!(screen.contains("1 min"), "the net time stands still at the minute worked:\n{screen}");
+    assert_eq!(forbidden(&screen), None, "{screen}");
+    done(&dir);
+}

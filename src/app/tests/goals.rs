@@ -84,7 +84,7 @@ fn goals_are_measured_over_their_windows_and_read_under_the_tree_the_counter_and
     h.set_locale("tr").set_glyph_mode(GlyphMode::Ascii);
     h.press("1");
     let screen = h.screen();
-    assert!(screen.contains("1.2/1 sa"), "{screen}");
+    assert!(screen.contains("1,2/1 sa"), "{screen}");
     assert_eq!(forbidden(&screen), None, "{screen}");
     h.resize(40, 24);
     let screen = h.screen();
@@ -194,5 +194,32 @@ fn t_starts_a_countdown_that_counts_down_says_when_it_is_up_and_goes_on() {
     assert_eq!(forbidden(&screen), None, "{screen}");
     h.press("esc");
     assert!(h.app().today().timed().is_none());
+    done(&dir);
+}
+
+#[test]
+fn the_suggested_goal_is_the_one_the_person_set_not_the_one_qfocus_starts_with() {
+    let dir = temp("goal-suggestion");
+    let (_, focus) = seeded(&dir);
+    let clock = FakeClock::new();
+    // An hour and a half instead of the hour qfocus starts with.
+    let prefs = Prefs { default_goal: 5_400, ..Prefs::default() };
+    let mut h = harness(app_with(&dir, &clock, &prefs), 80, 24);
+    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    h.press("g");
+    let screen = h.screen();
+    assert!(screen.contains("Goal for Rust"), "{screen}");
+    assert!(
+        h.app().today().goal_edit().is_some_and(|edit| edit.amount == 5_400),
+        "the field opens on the suggestion the person set:\n{screen}"
+    );
+    h.press("esc");
+    // A countdown starts from the same suggestion.
+    h.press("t");
+    assert!(
+        h.app().today().timed().is_some_and(|timed| timed.amount == 5_400),
+        "and so does a countdown:\n{}",
+        h.screen()
+    );
     done(&dir);
 }

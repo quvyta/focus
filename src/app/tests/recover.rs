@@ -86,7 +86,7 @@ fn said_at_start(key: &str, args: &[(&str, &str)]) -> String {
 
 /// Leaves a running file of Rust with five minutes of work, started at `started` and last
 /// refreshed five minutes later, measured by `watch`.
-fn left_running(dir: &Path, focus: Id, started: i64, watch: Watch) {
+pub(super) fn left_running(dir: &Path, focus: Id, started: i64, watch: Watch) {
     let store = Store::open(Paths::at(dir, "test"));
     let running = Running {
         focus,

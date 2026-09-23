@@ -265,6 +265,10 @@ weeks-all = "Les 52 dernières semaines ; aujourd’hui est au bord droit."
 weeks-shown = "Les {shown} dernières des 52 semaines ; aujourd’hui est au bord droit."
 day-of-month = "{day} {month}"
 
+[wizard]
+step-day = "Ta journée"
+day-intro = "Quand ta journée commence et finit, et ce qui compte comme travail. Tout est modifiable plus tard."
+
 [settings]
 time = "Temps"
 week-start = "Premier jour"

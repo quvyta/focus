@@ -265,6 +265,10 @@ weeks-all = "最近 52 周；今天在最右边。"
 weeks-shown = "52 周中的最近 {shown} 周；今天在最右边。"
 day-of-month = "{month}{day}日"
 
+[wizard]
+step-day = "你的一天"
+day-intro = "一天何时开始、何时结束，以及什么算作工作。这些之后都可以改。"
+
 [settings]
 time = "时间"
 week-start = "每周开始于"

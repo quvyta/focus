@@ -176,3 +176,34 @@ fn ascii_glyphs_and_turkish_keep_the_screens_clean() {
     assert_eq!(forbidden(&screen), None, "{screen}");
     done(&dir);
 }
+
+#[test]
+fn a_ceiling_of_an_hour_flags_a_session_the_default_would_have_let_pass() {
+    let dir = temp("ceiling-setting");
+    seeded(&dir);
+    let clock = FakeClock::new();
+    // An hour, the lowest the setting takes; under the twelve hours qfocus starts with, a session
+    // this long is nothing worth asking about.
+    let prefs = Prefs { ceiling: 3_600, ..Prefs::default() };
+    let mut h = harness(app_with(&dir, &clock, &prefs), 80, 24);
+    h.click_text("Rust");
+    clock.pass(3_000);
+    h.advance(Duration::from_secs(1));
+    assert!(
+        !h.app().timer().is_some_and(|screen| screen.running().flags.contains(&Flag::OverCeiling)),
+        "fifty minutes is under the ceiling:\n{}",
+        h.screen()
+    );
+    clock.pass(700);
+    h.advance(Duration::from_secs(1));
+    assert!(
+        h.app().timer().is_some_and(|screen| screen.running().flags.contains(&Flag::OverCeiling)),
+        "an hour and a minute is over the ceiling the person chose:\n{}",
+        h.screen()
+    );
+    h.press("space").advance(Duration::from_millis(200));
+    let screen = h.screen();
+    assert!(screen.contains("This session lasted 1 h"), "the question names the session's length:\n{screen}");
+    assert!(screen.contains("Fix the duration") && screen.contains("Leave as is"), "{screen}");
+    done(&dir);
+}

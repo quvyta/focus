@@ -6,6 +6,7 @@
 //! a test can hand in a clock of its own and drive the timer without waiting.
 
 use std::io;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use qframe::date::{Date, DateTime, Weekday, local_offset};
@@ -13,7 +14,7 @@ use qframe::prelude::*;
 use qframe::runtime::{Confirm, Task, TaskId, Termination};
 use qframe::storage::{Family, Settings, atomic_write};
 use qframe::uptime::Uptime;
-use qframe::widgets::{Appearance, Bar, BarChart, BigText, Modal, Span, Toast};
+use qframe::widgets::{Appearance, Bar, BarChart, BigText, Modal, Setup, SetupMsg, Span, Toast};
 
 use crate::clock;
 use crate::day::{DayTotals, totals};
@@ -39,6 +40,7 @@ use crate::ui::{GoalRow, goal_gauges, goal_rows, info_line, warning_line};
 mod counter;
 mod data;
 mod view;
+mod wizard;
 
 /// The keymap compiled in, so an installed program carries its keys with it.
 const KEYMAP: &str = include_str!("../../keymap.toml");
@@ -81,12 +83,26 @@ pub fn run() -> io::Result<()> {
             (Store::open_read_only(Paths::at(nowhere, machine_name())), false)
         }
     };
+    // The first start asks before anything is written. While the wizard is open even resolving
+    // the shared preferences the usual way would make `quvyta.conf`, so they come from the
+    // wizard, which resolves them without touching a file.
+    let i18n = crate::config::spoken();
+    let setup = Family::QUVYTA
+        .config_dir()
+        .map(|_| Setup::new(Family::QUVYTA, crate::config::APP, &i18n, Msg::Setup).on_finish(Msg::SetUp))
+        .filter(Setup::needed);
     // The shared look is resolved before the first frame, so the family's language and theme are
     // in force from the start; the rows on the Settings page write it back.
-    let preferences = crate::config::preferences();
+    let preferences = match &setup {
+        Some(setup) => setup.preferences().clone(),
+        None => crate::config::preferences(),
+    };
     let appearance = Appearance::new(Family::QUVYTA, crate::config::APP, preferences.clone());
-    let app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone(), appearance)
+    let mut app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone(), appearance)
         .with_left_behind(left_behind);
+    if let Some(setup) = setup {
+        app = app.with_setup(setup, None);
+    }
     let mut runtime =
         Runtime::new(app).settings(&settings).preferences(&preferences).keymap_source("keymap.toml", KEYMAP);
     for &(file, text) in crate::locales() {
@@ -120,7 +136,10 @@ impl Page {
 }
 
 /// Everything that can happen in the application.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Not [`Eq`]: the framework's setup messages carry how far a font install has come, which is
+/// measured as a fraction.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Msg {
     /// Something happened on the Today screen.
     Today(today::Msg),
@@ -194,6 +213,11 @@ pub enum Msg {
     Quiet(bool),
     /// A minute turned while the dashboard stands, so its clock is drawn again.
     Minute,
+    /// Something on the first step of the setup wizard, which the framework answers.
+    Setup(SetupMsg),
+    /// The wizard wrote the shared keys and made the settings file; qfocus writes its own
+    /// settings into it.
+    SetUp,
 }
 
 impl From<today::Msg> for Msg {
@@ -279,6 +303,12 @@ pub struct QFocus {
     settings: Settings,
     /// The rows every application of the family shows for its look, and what they write.
     appearance: Appearance,
+    /// The first-run wizard, while qfocus has no settings file of its own; `None` once it is
+    /// over and on every start after it.
+    setup: Option<Setup<Msg>>,
+    /// The family's folder when it is not this platform's own, for a test; the appearance is
+    /// rebuilt over it when the wizard finishes.
+    config_folder: Option<PathBuf>,
     page: Page,
     today: Today,
     charts: Charts,
@@ -351,6 +381,8 @@ impl QFocus {
             settings_screen: SettingsScreen::new(settings.diagnostics().to_vec()),
             settings,
             appearance,
+            setup: None,
+            config_folder: None,
             page: Page::Today,
             today: Today::new(),
             charts: Charts::new(),
@@ -373,6 +405,16 @@ impl QFocus {
         };
         app.refresh_day();
         app
+    }
+
+    /// The application with the first-run wizard open, writing into `folder` as the family's
+    /// folder when it is not this platform's own. Only a [`Setup`] that is still
+    /// [needed](Setup::needed) is worth handing over.
+    #[must_use]
+    pub fn with_setup(mut self, setup: Setup<Msg>, folder: Option<PathBuf>) -> Self {
+        self.setup = Some(setup);
+        self.config_folder = folder;
+        self
     }
 
     /// Sets whether the clocks count from the machine's boot, which is
@@ -550,6 +592,11 @@ impl QFocus {
                 self.prefs.write(&mut self.settings);
                 // The day and the goals regroup at once; the records are untouched.
                 self.refresh_day();
+                // While the wizard asks, the choice is held in memory alone: the file is made
+                // when it finishes, and a wizard left half-way leaves nothing behind.
+                if self.setting_up() {
+                    return command;
+                }
                 Command::batch([command, self.save_settings()])
             }
             Some(settings::Request::ResetStats) => Command::batch([command, self.reset_stats()]),
@@ -727,7 +774,9 @@ impl App for QFocus {
         // The keyboard starts on the list, so the arrows work before any tab is picked; a
         // counter taken over moves it to its own button after this.
         let found = self.find_running();
-        Command::batch([Command::focus(today::TREE), found, self.sync_tick()])
+        // On the first start the wizard has the screen, so the appearance rows take the keys.
+        let first = if self.setting_up() { wizard::FIRST } else { today::TREE };
+        Command::batch([Command::focus(first), found, self.sync_tick()])
     }
 
     fn before_quit(&self) -> Option<Msg> {
@@ -752,6 +801,11 @@ impl App for QFocus {
     }
 
     fn action(&self, name: &str) -> Option<Msg> {
+        // While the wizard asks, the application's keys have nothing to act on: no page is
+        // drawn under it and nothing may be written before Finish.
+        if self.setting_up() {
+            return None;
+        }
         match name {
             "back" => Some(Msg::Back),
             "archive" => Some(Msg::Archive),
@@ -775,6 +829,11 @@ impl App for QFocus {
     }
 
     fn view(&self, ui: &mut View<'_, Msg>) {
+        // The first start asks before it shows anything of its own: the wizard has the screen.
+        if self.setting_up() {
+            self.setup_wizard(ui);
+            return;
+        }
         // The watches live here, not on the screens: the counter runs on whichever page is open,
         // and a watch is only answered while the frame declares it. With a counter the silence
         // is the work's concern and, later, the screen's; without one it is the dashboard's.
@@ -887,6 +946,17 @@ impl QFocus {
                 Command::none()
             }
             Msg::Minute => self.minute(),
+            // The framework owns its step: it applies the change, writes the two files when the
+            // wizard finishes, and answers with `Msg::SetUp`.
+            Msg::Setup(message) => match self.setup.take() {
+                Some(mut setup) => {
+                    let done = setup.update(message, &mut self.settings);
+                    self.setup = Some(setup);
+                    done
+                }
+                None => Command::none(),
+            },
+            Msg::SetUp => self.finish_setup(),
         }
     }
 }

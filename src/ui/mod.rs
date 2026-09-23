@@ -114,10 +114,15 @@ impl GoalRow {
     }
 }
 
-/// `seconds` as hours to the nearest tenth, whole when they are, else with one decimal.
+/// `seconds` as hours to the nearest tenth, whole when they are, else with one decimal written
+/// the way the active language writes it: `1.5` in English, `1,5` in Turkish.
 fn hours_text(seconds: u64) -> String {
     let tenths = (seconds * 10 + 1_800) / 3_600;
-    if tenths.is_multiple_of(10) { (tenths / 10).to_string() } else { format!("{}.{}", tenths / 10, tenths % 10) }
+    if tenths.is_multiple_of(10) {
+        (tenths / 10).to_string()
+    } else {
+        format!("{}{}{}", tenths / 10, qframe::i18n::decimal_separator(), tenths % 10)
+    }
 }
 
 /// Every goal of the catalogue's shown rows, categories first in their order and each one's
@@ -187,7 +192,19 @@ pub fn goal_gauges<M: 'static>(rows: &[GoalRow], units: &Units<'_>, ui: &mut Vie
 
 #[cfg(test)]
 mod tests {
-    use super::button_rows;
+    use super::{button_rows, hours_text};
+
+    #[test]
+    fn hours_carry_the_decimal_mark_of_the_language() {
+        assert_eq!(hours_text(5_400), "1.5");
+        assert_eq!(hours_text(7_200), "2");
+        let mut i18n = qframe::i18n::I18n::builtin();
+        for &(file, text) in crate::locales() {
+            i18n.add_source(file, text);
+        }
+        i18n.set_active("tr");
+        assert_eq!(qframe::i18n::scope(std::sync::Arc::new(i18n), || hours_text(5_400)), "1,5");
+    }
 
     #[test]
     fn a_strip_of_buttons_keeps_one_row_while_the_words_leave_room() {

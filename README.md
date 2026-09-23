@@ -66,8 +66,14 @@ The program is installed as `qfocus` and also as `quvyta-focus`. Rust 1.95 or la
 
 ## Using it
 
-Run `qfocus` to open the interface. The first time, add a category and write a focus under it,
-then press `enter` on the focus to start it.
+Run `qfocus` to open the interface. The first time it asks a few questions: the language, the
+theme and the icons every Quvyta application shares, and then when your day starts and ends.
+Nothing is written until you finish, and "Start with the defaults" skips the lot.
+
+![The first start: the appearance step, with the language, theme and icons every Quvyta application shares, and the offer to install the Nerd Font symbols](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/wizard.png)
+
+After that, add a category and write a focus under it, then press `enter` on the focus to start
+it.
 
 | Key | What it does |
 |---|---|
