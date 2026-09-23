@@ -162,7 +162,7 @@ fn two_minutes_of_silence_show_the_dashboard_and_the_first_input_brings_the_page
     let focus = with_goals(&dir);
     let clock = FakeClock::new();
     let mut h = harness(app_at(&dir, &clock), 80, 40);
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("3").press("/").type_text("meeting").press("enter");
     assert_eq!(h.app().records().query(), "meeting");
     h.advance(Duration::from_secs(119));

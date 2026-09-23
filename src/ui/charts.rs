@@ -157,6 +157,17 @@ impl Charts {
         self.scale
     }
 
+    /// Whether the bars of the current scale lie down at `width` columns, so ↑ and ↓ pick among
+    /// them rather than ← and →: the day below 72 columns, the week below 56.
+    #[must_use]
+    pub fn bars_lie_down(&self, width: u16) -> bool {
+        match self.scale {
+            Scale::Day => width < HOURS_STAND_FROM,
+            Scale::Week => width < NARROW_BELOW,
+            Scale::Month | Scale::Year => false,
+        }
+    }
+
     /// What is picked on the current scale, counted from the start of the stretch.
     #[must_use]
     pub fn selected(&self) -> Option<usize> {

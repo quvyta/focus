@@ -9,9 +9,7 @@ use super::*;
 
 use qframe::date::TimeOfDay;
 use qframe::icons::nerd_font::Install;
-use qframe::widgets::{AppearanceChange, Setup, SetupMsg};
-
-use crate::ui::settings;
+use qframe::widgets::Setup;
 
 /// qfocus on the machine in `root`, on a screen of `width` by `height`, built the way
 /// [`crate::app::run`] builds it: the wizard when there is no settings file, and nothing at all
@@ -70,15 +68,29 @@ fn written(root: &Path) -> Settings {
     Settings::parse_str("focus.conf", &text).member_of(&Family::QUVYTA).schema(Prefs::schema())
 }
 
-/// Goes to qfocus's own step and chooses four settings, none of them the default.
+/// Chooses the Nordic theme on the appearance step, with the pointer.
+fn choose_nordic(h: &mut Harness<QFocus>) {
+    pick(h, "Theme", "Nordic");
+}
+
+/// Goes on to qfocus's own step with Next and chooses four settings there, none of them the
+/// default, with the pointer: the times and lengths with the wheel, since the keyboard cannot type
+/// them yet (see the ignored test on the Settings page).
 fn choose(h: &mut Harness<QFocus>) {
-    h.send(Msg::Setup(SetupMsg::Next));
+    h.click_text("Next");
+    h.advance(Duration::from_millis(100));
     // An English calendar starts the week on Sunday, so Saturday is a day nobody follows by
     // itself: choosing it pins the week.
-    h.send(Msg::Settings(settings::Msg::WeekStart(5)));
-    h.send(Msg::Settings(settings::Msg::Rollover(TimeOfDay::new(4, 0, 0))));
-    h.send(Msg::Settings(settings::Msg::Length(settings::Timed::IdleAfter, Duration::from_secs(5 * 60))));
-    h.send(Msg::Settings(settings::Msg::Length(settings::Timed::Ceiling, Duration::from_secs(6 * 3_600))));
+    pick(h, "Week starts on", "Saturday");
+    roll(h, "Day turns at", 0, 4);
+    roll(h, "Away after", 1, -10);
+    roll(h, "Session ceiling", 0, -6);
+}
+
+/// Clicks Finish, the wizard's last button.
+fn finish(h: &mut Harness<QFocus>) {
+    h.click_text("Finish");
+    h.advance(Duration::from_millis(100));
 }
 
 /// What [`choose`] chose.
@@ -123,7 +135,7 @@ fn half_way_through_the_wizard_nothing_has_been_written_at_all() {
     let config = root.join("config");
     assert_eq!(names(&root), Vec::<String>::new(), "nothing is written before it is asked");
 
-    h.send(Msg::Setup(SetupMsg::Appearance(AppearanceChange::Theme("nordic".to_owned()))));
+    choose_nordic(&mut h);
     choose(&mut h);
     h.advance(Duration::from_millis(100));
 
@@ -144,10 +156,9 @@ fn finishing_writes_both_files_and_qfocus_own_settings_are_the_ones_chosen() {
     let root = temp("wizard-finish");
     let clock = FakeClock::new();
     let mut h = start(&root, &clock, 80, 30);
-    h.send(Msg::Setup(SetupMsg::Appearance(AppearanceChange::Theme("nordic".to_owned()))));
+    choose_nordic(&mut h);
     choose(&mut h);
-    h.send(Msg::Setup(SetupMsg::Finish));
-    h.advance(Duration::from_millis(100));
+    finish(&mut h);
 
     assert!(!h.app().setting_up(), "the wizard is over:\n{}", h.screen());
     assert_eq!(names(&root), ["focus.conf", "quvyta.conf"]);
@@ -196,10 +207,9 @@ fn after_finishing_the_normal_screen_opens_and_the_settings_page_shows_what_was_
     let root = temp("wizard-settings-page");
     let clock = FakeClock::new();
     let mut h = start(&root, &clock, 80, 40);
-    h.send(Msg::Setup(SetupMsg::Appearance(AppearanceChange::Theme("nordic".to_owned()))));
+    choose_nordic(&mut h);
     choose(&mut h);
-    h.send(Msg::Setup(SetupMsg::Finish));
-    h.advance(Duration::from_millis(100));
+    finish(&mut h);
 
     assert_eq!(h.app().page(), Page::Today);
     assert!(h.screen().contains("Today"), "the tabs are back:\n{}", h.screen());

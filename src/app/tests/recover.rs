@@ -219,9 +219,9 @@ fn a_recovered_countdown_keeps_counting_down() {
     let (_, focus) = seeded(&dir);
     let clock = FakeClock::new();
     let mut h = harness(app_at(&dir, &clock), 80, 24);
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("t");
-    h.send(Msg::Today(today::Msg::TimedAmount(Duration::from_secs(600))));
+    h.type_text("0010");
     h.click_text("Start");
     clock.pass(120);
     h.advance(Duration::from_secs(1));

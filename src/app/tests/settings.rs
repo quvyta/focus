@@ -114,11 +114,15 @@ fn the_keys_walk_the_settings_and_a_switch_moves_with_space() {
     assert!(h.app().prefs().stop_at_goal, "{}", h.screen());
     h.press("space");
     assert!(!h.app().prefs().stop_at_goal);
-    // A length typed under its floor is not applied; the reason stands under the label.
-    h.send(Msg::Settings(settings::Msg::Length(settings::Timed::IdleAfter, Duration::from_secs(20))));
-    assert_eq!(h.app().prefs().idle_after, Duration::from_secs(900));
+    // The wheel over the minutes of the idle threshold applies each length it passes; one under
+    // the floor is not applied, the reason stands under the label, and turning back up applies it.
+    roll(&mut h, "Away after", 1, -14);
+    assert_eq!(h.app().prefs().idle_after, Duration::from_secs(60));
+    assert!(!h.screen().contains("At least"), "{}", h.screen());
+    roll(&mut h, "Away after", 1, -1);
+    assert_eq!(h.app().prefs().idle_after, Duration::from_secs(60));
     assert!(h.screen().contains("At least 1 min"), "{}", h.screen());
-    h.send(Msg::Settings(settings::Msg::Length(settings::Timed::IdleAfter, Duration::from_secs(600))));
+    roll(&mut h, "Away after", 1, 10);
     assert_eq!(h.app().prefs().idle_after, Duration::from_secs(600));
     assert!(!h.screen().contains("At least"), "{}", h.screen());
     done(&dir);
@@ -135,8 +139,8 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
     let (app, path) = app_on_file(&dir, &clock);
     let mut h = harness(app, 80, 24);
     assert!(h.screen().lines().next().is_some_and(|top| top.ends_with("30 min")), "{}", h.screen());
-    h.send(Msg::Settings(settings::Msg::Rollover(TimeOfDay::new(4, 0, 0))));
-    h.advance(Duration::from_millis(100));
+    h.press("4");
+    roll(&mut h, "Day turns at", 0, 4);
     assert!(h.screen().lines().next().is_some_and(|top| top.ends_with("0 s")), "{}", h.screen());
     assert_eq!(h.app().prefs().rollover, TimeOfDay::new(4, 0, 0));
     let written = fs::read_to_string(&path).expect("settings written");
@@ -144,30 +148,30 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
     // The record itself is untouched.
     let month = fs::read_to_string(h.app().store().paths.month_file(2026, 9)).expect("month");
     assert_eq!(month.lines().count(), 1);
-    h.send(Msg::Settings(settings::Msg::Rollover(TimeOfDay::new(0, 0, 0))));
-    h.advance(Duration::from_millis(100));
+    roll(&mut h, "Day turns at", 0, -4);
     assert!(h.screen().lines().next().is_some_and(|top| top.ends_with("30 min")), "{}", h.screen());
     assert_eq!(fs::read_to_string(&path).expect("settings written"), "", "a default is not written");
     // The week window follows the first day of the week: the language's until one is chosen.
     assert_eq!(h.app().prefs().week_start, None);
-    h.press("2").click_text("Week");
+    // The digit keys would go to the time field the wheel left selected; the tab is clicked.
+    h.click_text("Charts").click_text("Week");
     let screen = h.screen();
     let labels = screen.lines().find(|line| line.contains("Sun")).unwrap_or_default();
     assert!(
         labels.trim_start().starts_with("Sun"),
         "an English week runs from Sunday, as the calendar's does:\n{screen}"
     );
-    h.send(Msg::Settings(settings::Msg::WeekStart(5)));
+    h.press("4");
+    pick(&mut h, "Week starts on", "Saturday");
     assert_eq!(h.app().prefs().week_start, Some(Weekday::Saturday));
-    h.hover(0, 0);
+    h.click_text("Charts");
     let screen = h.screen();
     let labels = screen.lines().find(|line| line.contains("Sun")).unwrap_or_default();
     assert!(labels.trim_start().starts_with("Sat"), "the week now runs from Saturday:\n{screen}");
     // A shared setting is applied at once and, since the box under the row is checked, written
     // in the shared file; qfocus's own file says it follows the ecosystem.
-    let change = qframe::widgets::AppearanceChange::Language("tr".to_owned());
-    h.send(Msg::Settings(settings::Msg::Appearance(change)));
-    h.advance(Duration::from_millis(100));
+    h.press("4");
+    pick(&mut h, "Language", "Türkçe");
     assert!(h.screen().contains("Grafikler"), "{}", h.screen());
     let written = fs::read_to_string(&path).expect("settings written");
     assert!(written.contains("language = \"quvyta\""), "{written}");
@@ -175,8 +179,7 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
     let shared = fs::read_to_string(dir.join("quvyta.conf")).expect("the shared file");
     assert!(shared.contains("language = \"tr\""), "{shared}");
     // Choosing the language's own first day unpins the week again.
-    h.send(Msg::Settings(settings::Msg::WeekStart(0)));
-    h.advance(Duration::from_millis(100));
+    pick(&mut h, "Hafta başı", "Pazartesi");
     assert_eq!(h.app().prefs().week_start, None, "Monday is where a Turkish week starts anyway");
     let written = fs::read_to_string(&path).expect("settings written");
     assert!(!written.contains("week-start"), "{written}");
@@ -185,9 +188,6 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
 
 #[test]
 fn the_look_goes_to_the_ecosystem_while_the_box_is_checked_and_to_qfocus_alone_once_it_is_cleared() {
-    use qframe::storage::Shared;
-    use qframe::widgets::AppearanceChange;
-
     let dir = temp("appearance-scope");
     seeded(&dir);
     let clock = FakeClock::new();
@@ -200,14 +200,18 @@ fn the_look_goes_to_the_ecosystem_while_the_box_is_checked_and_to_qfocus_alone_o
 
     // The box is checked on a fresh machine, so the theme goes to the ecosystem and qfocus's own
     // file says it follows.
-    h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Theme("nordic".to_owned()))));
+    pick(&mut h, "Theme", "Nordic");
     assert_eq!(h.env().theme().id(), "nordic", "{}", h.screen());
     assert!(fs::read_to_string(&shared).expect("the shared file").contains("theme = \"nordic\""));
     assert!(fs::read_to_string(&path).expect("qfocus's file").contains("theme = \"quvyta\""));
 
     // With the box cleared the next theme stays here; the ecosystem keeps the one it had.
-    h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Everywhere(Shared::Theme, false))));
-    h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Theme("amber".to_owned()))));
+    // A click on its label makes it the list's row, and Space moves the box.
+    let (row, _) = row_of(&h, "Theme");
+    let x = word_on_line(&h, row + 1, "In", 0).unwrap_or_else(|| panic!("the theme's box:\n{}", h.screen()));
+    h.click(x, row + 1).press("space");
+    h.advance(Duration::from_millis(100));
+    pick(&mut h, "Theme", "Amber");
     assert_eq!(h.env().theme().id(), "amber", "{}", h.screen());
     let written = fs::read_to_string(&path).expect("qfocus's file");
     assert!(written.contains("theme = \"amber\""), "{written}");
@@ -295,9 +299,10 @@ fn choosing_the_regions_own_first_day_leaves_the_week_unpinned() {
     let (app, path) = app_on_file(&dir, &clock);
     let mut h = harness(app, 80, 24);
     h.set_locale("tr").set_region(Some("US"));
-    h.send(Msg::Settings(settings::Msg::WeekStart(0)));
+    h.press("4");
+    pick(&mut h, "Hafta başı", "Pazartesi");
     assert_eq!(h.app().prefs().week_start, Some(Weekday::Monday), "Monday is not where this week starts");
-    h.send(Msg::Settings(settings::Msg::WeekStart(6)));
+    pick(&mut h, "Hafta başı", "Pazar");
     assert_eq!(h.app().prefs().week_start, None, "Sunday is where the region starts it anyway");
     let written = fs::read_to_string(&path).unwrap_or_default();
     assert!(!written.contains("week-start"), "{written}");
@@ -336,12 +341,12 @@ fn holding_reset_moves_every_session_to_the_trash_one_line_each_and_ctrl_z_bring
     h.press("ctrl+z");
     assert!(h.screen().contains("Nothing to undo"), "{}", h.screen());
     // A second pass takes them again, undo brings them again, and an empty store says so.
-    h.send(Msg::Settings(settings::Msg::ResetStats));
+    hold(&mut h, "Delete records");
     assert!(h.app().store().sessions.is_empty());
     h.press("ctrl+z");
     assert_eq!(h.app().store().sessions.len(), 3);
-    h.send(Msg::Settings(settings::Msg::ResetStats));
-    h.send(Msg::Settings(settings::Msg::ResetStats));
+    hold(&mut h, "Delete records");
+    hold(&mut h, "Delete records");
     assert!(h.screen().contains("no records to delete"), "{}", h.screen());
     done(&dir);
 }
@@ -389,7 +394,11 @@ fn holding_delete_older_moves_only_the_days_before_the_chosen_one_and_ctrl_z_bri
     assert!(h.screen().contains("No records began before"), "{}", h.screen());
     assert_eq!(h.app().store().sessions.len(), 7);
     // Tuesday the 15th: the 14th, the 10th and August go; the 15th itself stays.
-    h.send(Msg::Settings(settings::Msg::OlderDate(Date::new(2026, 9, 15).expect("valid date"))));
+    // The date field opens its calendar on a click; a year on, then three days back, and Enter.
+    h.click_text("September 18, 2025");
+    h.advance(Duration::from_millis(100));
+    h.press("shift+pgdn").press("left").press("left").press("left").press("enter");
+    assert!(h.screen().contains("September 15, 2026"), "{}", h.screen());
     hold(&mut h, "Delete older");
     let screen = h.screen();
     assert!(screen.contains("3 sessions moved to the trash"), "{screen}");
@@ -607,16 +616,27 @@ fn an_instance_that_only_looks_cannot_reset_or_delete() {
     let mut first = Store::open(Paths::at(&dir, "test"));
     first.void(removed.id, NOON).expect("void");
     let clock = FakeClock::new();
-    let mut h = harness(app_at(&dir, &clock), 80, 40);
+    let mut h = harness(app_at(&dir, &clock), 80, 60);
     h.press("4");
-    h.send(Msg::Settings(settings::Msg::ResetStats));
-    assert!(h.screen().contains("only looks"), "{}", h.screen());
-    assert_eq!(h.app().store().sessions.len(), 1);
     let month = fs::read(first.paths.month_file(2026, 9)).expect("month");
+    // The controls are muted: holding them and clicking the trash's button do nothing at all.
+    for label in ["Delete records", "Delete older", "Delete everything"] {
+        hold(&mut h, label);
+    }
+    h.click_text("Empty the trash");
+    h.advance(Duration::from_millis(200));
+    assert_eq!(h.app().store().sessions.len(), 1, "{}", h.screen());
+    assert!(!h.screen().contains("Empty the trash for good?"), "{}", h.screen());
+    assert!(!h.screen().contains("This qfocus only looks"), "nothing even reached the application:\n{}", h.screen());
+    // Under them the application refuses as well, should anything ever reach it: the messages the
+    // muted controls would send are sent here directly, since no person can send them any more.
+    h.send(Msg::Settings(settings::Msg::ResetStats));
+    assert!(h.screen().contains("This qfocus only looks"), "{}", h.screen());
+    assert_eq!(h.app().store().sessions.len(), 1);
     h.send(Msg::Settings(settings::Msg::EmptyTrash));
     assert!(!h.screen().contains("Empty the trash for good?"), "{}", h.screen());
     h.send(Msg::Settings(settings::Msg::Purge));
-    assert!(h.screen().contains("only looks"), "{}", h.screen());
+    assert!(h.screen().contains("This qfocus only looks"), "{}", h.screen());
     assert_eq!(h.app().store().voided.len(), 1);
     assert_eq!(fs::read(first.paths.month_file(2026, 9)).expect("month"), month);
     assert!(first.paths.trash_file(2026, 9).exists());
@@ -657,5 +677,42 @@ fn emptying_the_trash_keeps_the_archived_focus_a_counter_left_behind_still_runs_
     let saved = fs::read_to_string(h.app().store().paths.tree_file()).expect("tree");
     assert!(saved.contains("Review"), "and in the file it was written to:\n{saved}");
     assert!(h.app().timer().is_some(), "the counter itself is untouched:\n{screen}");
+    done(&dir);
+}
+
+#[test]
+fn a_time_and_a_length_are_typed_into_their_rows_from_the_keyboard() {
+    let dir = temp("settings-typed");
+    seeded(&dir);
+    let clock = FakeClock::new();
+    let mut h = harness(app_at(&dir, &clock), 80, 40);
+    h.press("4");
+    type_in_row(&mut h, "Day turns at", 0, "0415");
+    assert_eq!(h.app().prefs().rollover, TimeOfDay::new(4, 15, 0), "{}", h.screen());
+    // The minutes of the idle threshold, clicked and typed, are minutes.
+    type_in_row(&mut h, "Away after", 1, "05");
+    assert_eq!(h.app().prefs().idle_after, Duration::from_secs(300), "{}", h.screen());
+    type_in_row(&mut h, "Session ceiling", 0, "06");
+    assert_eq!(h.app().prefs().ceiling, 6 * 3_600, "{}", h.screen());
+    done(&dir);
+}
+
+#[test]
+fn the_suggested_goal_set_on_its_row_is_what_the_goal_field_starts_from() {
+    let dir = temp("settings-suggested-goal");
+    let (_, focus) = seeded(&dir);
+    let clock = FakeClock::new();
+    let mut h = harness(app_at(&dir, &clock), 80, 40);
+    h.press("4");
+    // Half an hour more than the hour qfocus starts with, turned on the row's minutes.
+    roll(&mut h, "Suggested goal", 1, 30);
+    assert_eq!(h.app().prefs().default_goal, 5_400, "{}", h.screen());
+    // The digit keys would go to the field the wheel left selected; the tab is clicked.
+    h.click_text("Today");
+    tab_to(&mut h, today::TREE);
+    walk_to(&mut h, Row::Focus(focus));
+    h.press("g");
+    assert!(h.app().today().goal_edit().is_some_and(|edit| edit.amount == 5_400), "{}", h.screen());
+    assert!(h.screen().contains("1 h 30 min"), "{}", h.screen());
     done(&dir);
 }

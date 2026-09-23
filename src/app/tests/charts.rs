@@ -209,8 +209,8 @@ fn ascii_and_turkish_charts_keep_clean() {
     assert!(h.is_focused(charts::CHART), "the keys follow the scale:\n{screen}");
     h.press("right");
     assert!(h.screen().contains("Pazartesi - 30 dk - Life 30 dk"), "{}", h.screen());
-    // "Ay" is also the start of the Ayarlar tab, so the scale is chosen by message.
-    h.send(Msg::Charts(charts::Msg::Scale(charts::Scale::Month.index())));
+    // "Ay" is also the start of the Ayarlar tab, so the scale is clicked where it stands as a word.
+    click_word(&mut h, "Ay");
     let screen = h.screen();
     assert!(screen.contains("6 oturum - ortalama 52 dk 30 sn"), "{screen}");
     assert_eq!(forbidden(&screen), None, "{screen}");
@@ -220,7 +220,7 @@ fn ascii_and_turkish_charts_keep_clean() {
     assert_eq!(forbidden(&screen), None, "{screen}");
     h.resize(40, 24);
     for scale in ["Gün", "Hafta", "Ay", "Yıl"] {
-        h.click_text(scale);
+        click_word(&mut h, scale);
         assert_eq!(forbidden(&h.screen()), None, "{}", h.screen());
     }
     done(&dir);
@@ -335,4 +335,47 @@ fn a_narrow_strip_thins_its_hours_then_drops_the_legend() {
     assert!(screen.contains("Rust  12:40–13:00  20 dk"), "{screen}");
     assert_eq!(forbidden(&screen), None, "{screen}");
     done(&dir);
+}
+
+/// The footer names the keys that pick a bar, and they are the keys that do: bars that stand are
+/// picked with ← and →, bars laid down in a narrow window with ↑ and ↓. The test reads the hint
+/// off the screen and presses what it says, at each side of the widths where the bars lie down.
+#[test]
+fn the_pick_hint_names_the_keys_that_pick_at_every_width() {
+    let dir = temp("charts-pick-hint");
+    history(&dir);
+    let clock = FakeClock::new();
+    for (scale, width, lying) in [
+        ("Day", 80, false),
+        ("Day", 72, false),
+        ("Day", 71, true),
+        ("Day", 40, true),
+        ("Week", 56, false),
+        ("Week", 55, true),
+        ("Week", 40, true),
+    ] {
+        let mut h = charts_at(&dir, &clock, width, 30);
+        // The page opens on the day with the keys on its chart; choosing another scale hands
+        // the keys to that one's chart.
+        if scale != "Day" {
+            h.click_text(scale);
+        }
+        let footer = h.screen().lines().rev().find(|line| line.contains("pick")).unwrap_or_default().to_owned();
+        let (named, key) = if footer.contains("↑↓") {
+            (true, "down")
+        } else {
+            assert!(footer.contains("←→"), "{scale} at {width}: the hint names no arrows: {footer}");
+            (false, "right")
+        };
+        assert_eq!(named, lying, "{scale} at {width}: {footer}\n{}", h.screen());
+        let before = h.app().charts().selected();
+        h.press(key);
+        h.press(key);
+        assert_ne!(
+            h.app().charts().selected(),
+            before,
+            "{scale} at {width}: `{key}`, as the hint says, picks nothing\n{}",
+            h.screen()
+        );
+    }
 }

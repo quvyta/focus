@@ -10,7 +10,7 @@ fn g_sets_a_goal_and_the_tree_shows_a_meter_only_for_rows_that_have_one() {
     let mut h = harness(app_at(&dir, &clock), 80, 24);
     let before = h.screen();
     assert!(!before.contains("/1 h"), "no goal, no meter:\n{before}");
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("g");
     let screen = h.screen();
     assert!(screen.contains("Goal for Rust"), "{screen}");
@@ -35,7 +35,7 @@ fn g_sets_a_goal_and_the_tree_shows_a_meter_only_for_rows_that_have_one() {
     // Zero is refused with the reason; then the goal is removed.
     h.press("g");
     assert!(h.screen().contains("Remove"), "{}", h.screen());
-    h.send(Msg::Today(today::Msg::GoalAmount(Duration::ZERO)));
+    h.type_text("0000");
     h.click_text("Save");
     assert!(h.screen().contains("A goal cannot be zero"), "{}", h.screen());
     h.click_text("Remove");
@@ -142,45 +142,46 @@ fn t_starts_a_countdown_that_counts_down_says_when_it_is_up_and_goes_on() {
     let (_, focus) = seeded(&dir);
     let clock = FakeClock::new();
     let mut h = harness(app_at(&dir, &clock), 80, 24);
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("t");
     let screen = h.screen();
     assert!(screen.contains("Countdown for Rust"), "{screen}");
     assert_eq!(forbidden(&screen), None, "{screen}");
-    h.send(Msg::Today(today::Msg::TimedAmount(Duration::ZERO)));
+    h.type_text("0000");
     h.click_text("Start");
     assert!(h.screen().contains("A countdown cannot be zero"), "{}", h.screen());
     assert!(h.app().timer().is_none());
-    h.send(Msg::Today(today::Msg::TimedAmount(Duration::from_secs(90))));
+    // Start has the keyboard now; the field is clicked on its hours before the length is typed.
+    type_in_row(&mut h, "Countdown for Rust", 0, "0002");
     h.click_text("Start");
     assert_eq!(h.app().timer().map(TimerScreen::focus), Some(focus));
-    assert_eq!(h.app().timer().and_then(TimerScreen::countdown), Some(90));
+    assert_eq!(h.app().timer().and_then(TimerScreen::countdown), Some(120));
     h.hover(0, 0).advance(Duration::from_secs(10));
-    assert!(h.screen().contains("Counting down from 1 min 30 s"), "{}", h.screen());
-    clock.pass(90);
+    assert!(h.screen().contains("Counting down from 2 min"), "{}", h.screen());
+    clock.pass(120);
     h.advance(Duration::from_secs(1));
     let screen = h.screen();
-    assert!(screen.contains("1 min 30 s are up"), "{screen}");
+    assert!(screen.contains("2 min are up"), "{screen}");
     assert!(h.app().timer().is_some(), "it does not stop by itself");
     h.hover(0, 0).advance(Duration::from_secs(10));
-    assert!(h.screen().contains("target 1 min 30 s · 1 min 30 s"), "{}", h.screen());
+    assert!(h.screen().contains("target 2 min · 2 min"), "{}", h.screen());
     clock.pass(30);
     h.advance(Duration::from_secs(1));
-    assert!(h.screen().contains("target 1 min 30 s · 2 min"), "{}", h.screen());
+    assert!(h.screen().contains("target 2 min · 2 min 30 s"), "{}", h.screen());
     assert_eq!(forbidden(&h.screen()), None, "{}", h.screen());
     // A terminal in ASCII glyphs has no `·`, so the line joins its parts with a plain dash.
     h.set_glyph_mode(GlyphMode::Ascii);
-    assert!(h.screen().contains("target 1 min 30 s - 2 min"), "{}", h.screen());
+    assert!(h.screen().contains("target 2 min - 2 min 30 s"), "{}", h.screen());
     h.set_glyph_mode(GlyphMode::Unicode);
     h.press("space");
-    assert!(h.screen().contains("2 min recorded"), "{}", h.screen());
+    assert!(h.screen().contains("2 min 30 s recorded"), "{}", h.screen());
     drop(h);
     // The setting stops the counter when the countdown is up.
     let prefs = Prefs { stop_at_goal: true, ..Prefs::default() };
     let mut h = harness(app_with(&dir, &clock, &prefs), 80, 24);
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("t");
-    h.send(Msg::Today(today::Msg::TimedAmount(Duration::from_secs(60))));
+    h.type_text("0001");
     h.click_text("Start");
     clock.pass(60);
     h.advance(Duration::from_secs(1));
@@ -190,7 +191,7 @@ fn t_starts_a_countdown_that_counts_down_says_when_it_is_up_and_goes_on() {
     // At forty columns the countdown field stacks and stays clean, in Turkish and ASCII too.
     let mut h = harness(app_at(&dir, &clock), 40, 24);
     h.set_locale("tr").set_glyph_mode(GlyphMode::Ascii);
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("t");
     let screen = h.screen();
     assert!(screen.contains("Rust için geri sayım"), "{screen}");
@@ -209,7 +210,7 @@ fn the_suggested_goal_is_the_one_the_person_set_not_the_one_qfocus_starts_with()
     // An hour and a half instead of the hour qfocus starts with.
     let prefs = Prefs { default_goal: 5_400, ..Prefs::default() };
     let mut h = harness(app_with(&dir, &clock, &prefs), 80, 24);
-    h.send(Msg::Today(today::Msg::Select(Row::Focus(focus).key())));
+    walk_to(&mut h, Row::Focus(focus));
     h.press("g");
     let screen = h.screen();
     assert!(screen.contains("Goal for Rust"), "{screen}");

@@ -254,7 +254,9 @@ fn tour(code: &str, name: &str, look: Look, check: &mut dyn FnMut(&str, &Harness
     let mut h = wizard::start(&first, &clock, width, 30);
     h.set_locale(code).set_glyph_mode(look.glyphs);
     check("wizard, appearance", &h);
-    h.send(Msg::Setup(qframe::widgets::SetupMsg::Next));
+    // Tab reaches Next whatever the language calls it.
+    tab_to(&mut h, "wizard-next");
+    h.press("enter");
     check("wizard, the day", &h);
     settle(&mut h);
     done(&first);
@@ -278,8 +280,7 @@ fn tour(code: &str, name: &str, look: Look, check: &mut dyn FnMut(&str, &Harness
     h.set_locale(code).set_glyph_mode(look.glyphs);
     check("today", &h);
     settle(&mut h);
-    let rust = Row::Focus(Id::new(2, 2)).key();
-    h.send(Msg::Today(today::Msg::Select(rust.clone())));
+    walk_to(&mut h, Row::Focus(Id::new(2, 2)));
     h.press("g");
     check("goal field", &h);
     h.press("esc");
@@ -294,7 +295,9 @@ fn tour(code: &str, name: &str, look: Look, check: &mut dyn FnMut(&str, &Harness
     check("row menu", &h);
     settle(&mut h);
     h.press("esc");
-    h.send(Msg::Today(today::Msg::Activate(rust)));
+    walk_to(&mut h, Row::Focus(Id::new(2, 2)));
+    h.press("enter");
+    assert!(h.app().timer().is_some(), "Enter on the row starts it:\n{}", h.screen());
     clock.pass(600);
     h.advance(Duration::from_secs(1));
     check("counter", &h);
@@ -312,21 +315,48 @@ fn tour(code: &str, name: &str, look: Look, check: &mut dyn FnMut(&str, &Harness
     h.press("esc");
     for scale in 0..4 {
         h.press("2");
-        h.send(Msg::Charts(crate::ui::charts::Msg::Scale(scale)));
+        // The scales are reached with Tab and the next one chosen with →, in any language; the
+        // keys then go to its chart, so Tab comes back for each.
+        if scale > 0 {
+            tab_to(&mut h, crate::ui::charts::SCALES);
+            h.press("right");
+        }
+        assert_eq!(h.app().charts().scale().index(), scale, "{}", h.screen());
         check(&format!("charts {scale}"), &h);
         settle(&mut h);
-        h.send(Msg::Charts(crate::ui::charts::Msg::Select(0)));
+        tab_to(&mut h, crate::ui::charts::CHART);
+        // A standing chart is walked with ←/→, the year's days with the arrows and Enter, and the
+        // day's hours, lying down on a narrow screen, with ↑/↓.
+        for key in ["right", "enter", "down"] {
+            if h.app().charts().selected().is_none() {
+                h.press(key);
+            }
+        }
+        assert!(h.app().charts().selected().is_some(), "a bar is picked:\n{}", h.screen());
         check(&format!("charts {scale}, picked"), &h);
         settle(&mut h);
     }
     h.press("3");
     for view in 0..4 {
-        h.send(Msg::Records(crate::ui::records::Msg::View(view)));
+        // Each view is the next one to the right; Tab comes back to the chooser for each.
+        if view > 0 {
+            tab_to(&mut h, crate::ui::records::VIEWS);
+            h.press("right");
+        }
+        assert_eq!(h.app().records().view_kind().index(), view, "{}", h.screen());
         check(&format!("records {view}"), &h);
         settle(&mut h);
     }
-    h.send(Msg::Records(crate::ui::records::Msg::View(0)));
-    h.send(Msg::Records(crate::ui::records::Msg::Select(1)));
+    tab_to(&mut h, crate::ui::records::VIEWS);
+    h.press("home");
+    tab_to(&mut h, crate::ui::records::TABLE);
+    for _ in 0..10 {
+        if h.app().records().selected() == Some(1) {
+            break;
+        }
+        h.press("down");
+    }
+    assert_eq!(h.app().records().selected(), Some(1), "{}", h.screen());
     h.press("s");
     check("spans", &h);
     settle(&mut h);
@@ -342,7 +372,8 @@ fn tour(code: &str, name: &str, look: Look, check: &mut dyn FnMut(&str, &Harness
     h.press("4");
     check("settings", &h);
     settle(&mut h);
-    h.send(Msg::Settings(crate::ui::settings::Msg::EmptyTrash));
+    tab_to(&mut h, crate::ui::settings::PURGE);
+    h.press("enter");
     check("purge dialog", &h);
     settle(&mut h);
     done(&dir);
@@ -382,4 +413,130 @@ fn with_goals(dir: &Path) -> Id {
     tree.categories[0].focuses[0].goal = Some(Goal { amount: 3_600, period: Period::Day });
     fs::write(store.paths.tree_file(), tree.write()).expect("tree written");
     focus
+}
+
+/// The cells of the screen's line `y` as text, with the column each character stands in, so a
+/// place found in the text can be clicked whatever width the characters before it take.
+fn cells_of_line(h: &Harness<QFocus>, y: i32) -> (Vec<char>, Vec<i32>) {
+    let buffer = h.buffer();
+    let Ok(row) = u16::try_from(y) else { return (Vec::new(), Vec::new()) };
+    let (mut chars, mut columns) = (Vec::new(), Vec::new());
+    for x in 0..buffer.area.width {
+        for c in buffer[(x, row)].symbol().chars() {
+            chars.push(c);
+            columns.push(i32::from(x));
+        }
+    }
+    (chars, columns)
+}
+
+/// The column where `word` starts on line `y` at or after column `from`, standing as a word of its
+/// own: `Pazar` is not found inside `Pazartesi`.
+fn word_on_line(h: &Harness<QFocus>, y: i32, word: &str, from: i32) -> Option<i32> {
+    let (chars, columns) = cells_of_line(h, y);
+    let wanted: Vec<char> = word.chars().collect();
+    let edge = |at: Option<&char>| at.is_none_or(|c| !c.is_alphanumeric());
+    (0..chars.len().saturating_sub(wanted.len() - 1)).find_map(|start| {
+        let fits = columns[start] >= from
+            && chars[start..start + wanted.len()] == wanted[..]
+            && (start == 0 || edge(chars.get(start - 1)))
+            && edge(chars.get(start + wanted.len()));
+        fits.then_some(columns[start])
+    })
+}
+
+/// The line and the column just past the end of the row labelled `label`, the first on screen.
+fn row_of(h: &Harness<QFocus>, label: &str) -> (i32, i32) {
+    let (x, y) = h.find(label).unwrap_or_else(|| panic!("`{label}` is not on screen:\n{}", h.screen()));
+    (y, x + i32::try_from(label.chars().count()).unwrap_or(0))
+}
+
+/// Opens the drop-down of the settings row labelled `label` with a click and clicks `option` in
+/// the list it opens.
+fn pick(h: &mut Harness<QFocus>, label: &str, option: &str) {
+    let (y, after) = row_of(h, label);
+    let (arrow, _) = cells_of_line(h, y);
+    assert!(arrow.contains(&'▾'), "the row of `{label}` has no drop-down:\n{}", h.screen());
+    let x = word_on_line(h, y, "▾", after).unwrap_or_else(|| panic!("no arrow right of `{label}`:\n{}", h.screen()));
+    h.click(x, y);
+    h.advance(Duration::from_millis(100));
+    let height = i32::from(h.buffer().area.height);
+    // The field still shows the value in force; the option is clicked in the list, off its line.
+    let (ox, oy) = (0..height)
+        .filter(|line| *line != y)
+        .find_map(|line| word_on_line(h, line, option, 0).map(|x| (x, line)))
+        .unwrap_or_else(|| panic!("`{option}` is not in the open list of `{label}`:\n{}", h.screen()));
+    h.click(ox, oy);
+    h.advance(Duration::from_millis(100));
+}
+
+/// The column of the `segment`th run of digits right of the label on the row labelled `label`: the
+/// hours of a time or a length are the first, the minutes the second.
+fn segment_in_row(h: &Harness<QFocus>, label: &str, segment: usize) -> (i32, i32) {
+    let (y, after) = row_of(h, label);
+    let (chars, columns) = cells_of_line(h, y);
+    let starts: Vec<i32> = (0..chars.len())
+        .filter(|at| columns[*at] >= after && chars[*at].is_ascii_digit())
+        .filter(|at| *at == 0 || !chars[at - 1].is_ascii_digit())
+        .map(|at| columns[at])
+        .collect();
+    let x = *starts
+        .get(segment)
+        .unwrap_or_else(|| panic!("the row of `{label}` has no segment {segment}:\n{}", h.screen()));
+    (x, y)
+}
+
+/// Turns the wheel `notches` times over segment `segment` of the field on the row labelled
+/// `label`, up when `notches` is positive: the way a person sets a time or a length on a settings
+/// row with the pointer.
+fn roll(h: &mut Harness<QFocus>, label: &str, segment: usize, notches: i32) {
+    let (x, y) = segment_in_row(h, label, segment);
+    let kind = if notches > 0 { MouseKind::ScrollUp } else { MouseKind::ScrollDown };
+    for _ in 0..notches.unsigned_abs() {
+        h.mouse(kind, x, y);
+    }
+    h.advance(Duration::from_millis(100));
+}
+
+/// Clicks segment `segment` of the field on the row labelled `label` and types `digits`, as a
+/// person sets a time or a length from the keyboard.
+fn type_in_row(h: &mut Harness<QFocus>, label: &str, segment: usize, digits: &str) {
+    let (x, y) = segment_in_row(h, label, segment);
+    h.click(x, y);
+    h.type_text(digits);
+    h.advance(Duration::from_millis(100));
+}
+
+/// Presses Tab until the widget `id` has the keyboard, as a person reaches a control without the
+/// mouse; fails when forty presses do not reach it.
+fn tab_to(h: &mut Harness<QFocus>, id: &str) {
+    for _ in 0..40 {
+        if h.is_focused(id) {
+            return;
+        }
+        h.press("tab");
+    }
+    assert!(h.is_focused(id), "Tab never reaches `{id}`:\n{}", h.screen());
+}
+
+/// Walks the Today tree with ↓ until `row` is the selected one, as a person picks a row from the
+/// keyboard; fails when twenty presses do not reach it.
+fn walk_to(h: &mut Harness<QFocus>, row: Row) {
+    for _ in 0..20 {
+        if h.app().today().selected().as_ref() == Some(&row) {
+            return;
+        }
+        h.press("down");
+    }
+    assert_eq!(h.app().today().selected(), Some(row), "↓ never reaches the row:\n{}", h.screen());
+}
+
+/// Clicks the first place on screen where `word` stands as a word of its own: `Ay`, the month, and
+/// not the start of `Ayarlar`, the Settings tab.
+fn click_word(h: &mut Harness<QFocus>, word: &str) {
+    let height = i32::from(h.buffer().area.height);
+    let (x, y) = (0..height)
+        .find_map(|line| word_on_line(h, line, word, 0).map(|x| (x, line)))
+        .unwrap_or_else(|| panic!("`{word}` is not on screen as a word:\n{}", h.screen()));
+    h.click(x, y);
 }

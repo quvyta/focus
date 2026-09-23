@@ -212,7 +212,8 @@ impl QFocus {
                 .action(Scope::App, "archive")
                 .action(Scope::App, "rename"),
             (Page::Charts, _, _) => {
-                hints.hint(arrows, t!("hints.pick")).action(Scope::App, "today").action(Scope::App, "records")
+                let keys = if self.charts.bars_lie_down(ui.size().width) { updown.clone() } else { arrows };
+                hints.hint(keys, t!("hints.pick")).action(Scope::App, "today").action(Scope::App, "records")
             }
             (Page::Records, _, records::ViewKind::All) => hints
                 .hint(enter, t!("hints.correct"))

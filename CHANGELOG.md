@@ -2,6 +2,19 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.13 - 2026-09-23
+
+### Fixed
+
+- A time or a length typed into Settings or the first start goes where it is typed: `05` in the minutes of "Away after" is five minutes, not five hours and a quarter, and ← and → reach the minutes. Only the mouse wheel used to set them right.
+- On the Charts page in a narrow window, where the bars of a day or a week lie down, the footer says ↑ ↓ pick, the keys that pick them, instead of ← →.
+- In ASCII glyph mode a name too long for its column ends in `~` rather than `…`, which such a terminal cannot draw.
+- In a sixteen-colour terminal the page behind a dialog stays faint but readable, and the tab bar and raised surfaces stand off the ground instead of all turning black.
+
+### Changed
+
+- Built on quvyta-framework 0.1.20.
+
 ## 0.1.12 - 2026-09-23
 
 ### Changed

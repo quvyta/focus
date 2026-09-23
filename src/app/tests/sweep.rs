@@ -54,53 +54,17 @@ struct Exception {
     reason: &'static str,
 }
 
-/// Findings that are known. Every defect here is a framework component's and is filed with the
+/// Findings that are known. A defect found here is a framework component's and is filed with the
 /// framework rather than worked around.
 const EXCEPTIONS: &[Exception] = &[
-    // Defects: a framework component draws a mark ASCII does not have.
-    Exception {
-        screen: "records 0",
-        check: check::NON_ASCII,
-        detail: "draws `…`",
-        kind: Kind::Defect,
-        reason: "the table cuts a name that does not fit with `…` in ASCII mode too; the framework's cut has one mark for every mode",
-    },
-    // Defects: in sixteen colours the page behind a dialog disappears into its own ground.
+    // Defect: behind the quit dialog the timeline legend's label is drawn in the ground's own
+    // colour, so it is gone in true colour as well as in sixteen.
     Exception {
         screen: "quit dialog",
         check: check::CONTRAST,
-        detail: "keeps only 1.00:1",
+        detail: "`W` at 4,5 keeps only 1.00:1",
         kind: Kind::Defect,
-        reason: "the framework dims the page behind a dialog to a tone that reduces to the same colour as the ground",
-    },
-    Exception {
-        screen: "spans",
-        check: check::CONTRAST,
-        detail: "keeps only 1.00:1",
-        kind: Kind::Defect,
-        reason: "the framework dims the page behind a dialog to a tone that reduces to the same colour as the ground",
-    },
-    Exception {
-        screen: "record form",
-        check: check::CONTRAST,
-        detail: "keeps only 1.00:1",
-        kind: Kind::Defect,
-        reason: "the framework dims the page behind a dialog to a tone that reduces to the same colour as the ground",
-    },
-    Exception {
-        screen: "purge dialog",
-        check: check::CONTRAST,
-        detail: "keeps only 1.00:1",
-        kind: Kind::Defect,
-        reason: "the framework dims the page behind a dialog to a tone that reduces to the same colour as the ground",
-    },
-    // Defect: the theme's surfaces all reduce to black.
-    Exception {
-        screen: "today, empty",
-        check: check::FLAT,
-        detail: "4 background tones",
-        kind: Kind::Defect,
-        reason: "the ground, the tab bar and the lifted tab all reduce to black, so a screen with no selection has no shape left",
+        reason: "the framework draws the legend label behind a dialog in the canvas colour itself (12,12,14 on 12,12,14); filed as request 39",
     },
     // Limits: the glyphs are what the step shows.
     Exception {
@@ -121,7 +85,7 @@ const EXCEPTIONS: &[Exception] = &[
 
 /// How many exceptions the list is allowed to hold. Adding one means changing this number, which
 /// makes it a decision rather than an accident.
-const EXCEPTION_COUNT: usize = 8;
+const EXCEPTION_COUNT: usize = 3;
 
 /// One missed promise.
 struct Finding {
@@ -254,30 +218,11 @@ fn sweep_ascii(found: &mut Findings) {
     }
 }
 
-/// The sixteen standard terminal colours, the xterm defaults [`Rgb::to_ansi16`] snaps a colour
-/// to. A real terminal may be themed differently; these are what a reduction can count on.
-const ANSI16: [Rgb; 16] = [
-    Rgb::new(0, 0, 0),
-    Rgb::new(205, 0, 0),
-    Rgb::new(0, 205, 0),
-    Rgb::new(205, 205, 0),
-    Rgb::new(0, 0, 238),
-    Rgb::new(205, 0, 205),
-    Rgb::new(0, 205, 205),
-    Rgb::new(229, 229, 229),
-    Rgb::new(127, 127, 127),
-    Rgb::new(255, 0, 0),
-    Rgb::new(0, 255, 0),
-    Rgb::new(255, 255, 0),
-    Rgb::new(92, 92, 255),
-    Rgb::new(255, 0, 255),
-    Rgb::new(0, 255, 255),
-    Rgb::new(255, 255, 255),
-];
-
-/// The colour a sixteen-colour terminal shows in place of `color`.
-fn reduced(color: Rgb) -> Rgb {
-    ANSI16[usize::from(color.to_ansi16())]
+/// What a sixteen-colour terminal shows for text in `fg` on `bg`, on a screen whose ground is
+/// `ground`: the reduction the framework itself applies to a sixteen-colour frame, so the sweep
+/// sees what the person sees rather than a colour-by-colour snap.
+fn reduced_pair(fg: Rgb, bg: Rgb, ground: Rgb) -> (Rgb, Rgb) {
+    (Rgb::from_ansi16(fg.to_ansi16_text(bg, ground)), Rgb::from_ansi16(bg.to_ansi16_on(ground)))
 }
 
 /// The contrast text must keep against its background after the reduction: the framework's
@@ -299,6 +244,7 @@ fn sweep_sixteen_colours(found: &mut Findings) {
         let look = Look { width, glyphs: GlyphMode::Unicode };
         tour("en", &format!("sweep-colour-{width}"), look, &mut |name, h| {
             let area = h.buffer().area;
+            let ground = h.env().theme().color("canvas").expect("every theme has a canvas");
             let mut grounds: BTreeSet<[u8; 3]> = BTreeSet::new();
             let mut reduced_grounds: BTreeSet<u8> = BTreeSet::new();
             let mut worst: Option<(f64, char, u16, u16)> = None;
@@ -306,10 +252,11 @@ fn sweep_sixteen_colours(found: &mut Findings) {
                 for x in 0..area.width {
                     let Some(bg) = h.bg(x, y) else { continue };
                     grounds.insert([bg.r, bg.g, bg.b]);
-                    reduced_grounds.insert(bg.to_ansi16());
+                    reduced_grounds.insert(bg.to_ansi16_on(ground));
                     let glyph = h.buffer()[(x, y)].symbol().chars().next().filter(|c| is_text(*c));
                     let (Some(glyph), Some(fg)) = (glyph, h.fg(x, y)) else { continue };
-                    let ratio = reduced(fg).contrast_ratio(reduced(bg));
+                    let (fg, bg) = reduced_pair(fg, bg, ground);
+                    let ratio = fg.contrast_ratio(bg);
                     if worst.is_none_or(|(low, ..)| ratio < low) {
                         worst = Some((ratio, glyph, x, y));
                     }
