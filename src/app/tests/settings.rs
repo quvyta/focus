@@ -164,7 +164,7 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
     let labels = screen.lines().find(|line| line.contains("Sun")).unwrap_or_default();
     assert!(labels.trim_start().starts_with("Sat"), "the week now runs from Saturday:\n{screen}");
     // A shared setting is applied at once and, since the box under the row is checked, written
-    // in the family's file; qfocus's own file says it follows the family.
+    // in the shared file; qfocus's own file says it follows the ecosystem.
     let change = qframe::widgets::AppearanceChange::Language("tr".to_owned());
     h.send(Msg::Settings(settings::Msg::Appearance(change)));
     h.advance(Duration::from_millis(100));
@@ -172,7 +172,7 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
     let written = fs::read_to_string(&path).expect("settings written");
     assert!(written.contains("language = \"quvyta\""), "{written}");
     assert!(written.contains("week-start = \"saturday\""), "{written}");
-    let shared = fs::read_to_string(dir.join("quvyta.conf")).expect("the family's file");
+    let shared = fs::read_to_string(dir.join("quvyta.conf")).expect("the shared file");
     assert!(shared.contains("language = \"tr\""), "{shared}");
     // Choosing the language's own first day unpins the week again.
     h.send(Msg::Settings(settings::Msg::WeekStart(0)));
@@ -184,7 +184,7 @@ fn changing_the_rollover_regroups_the_day_and_reverting_brings_it_back_and_the_f
 }
 
 #[test]
-fn the_look_goes_to_the_family_while_the_box_is_checked_and_to_qfocus_alone_once_it_is_cleared() {
+fn the_look_goes_to_the_ecosystem_while_the_box_is_checked_and_to_qfocus_alone_once_it_is_cleared() {
     use qframe::storage::Shared;
     use qframe::widgets::AppearanceChange;
 
@@ -198,21 +198,21 @@ fn the_look_goes_to_the_family_while_the_box_is_checked_and_to_qfocus_alone_once
     assert!(screen.contains("In every Quvyta application"), "{screen}");
     let shared = dir.join("quvyta.conf");
 
-    // The box is checked on a fresh machine, so the theme goes to the family and qfocus's own
+    // The box is checked on a fresh machine, so the theme goes to the ecosystem and qfocus's own
     // file says it follows.
     h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Theme("nordic".to_owned()))));
     assert_eq!(h.env().theme().id(), "nordic", "{}", h.screen());
-    assert!(fs::read_to_string(&shared).expect("the family's file").contains("theme = \"nordic\""));
+    assert!(fs::read_to_string(&shared).expect("the shared file").contains("theme = \"nordic\""));
     assert!(fs::read_to_string(&path).expect("qfocus's file").contains("theme = \"quvyta\""));
 
-    // With the box cleared the next theme stays here; the family keeps the one it had.
+    // With the box cleared the next theme stays here; the ecosystem keeps the one it had.
     h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Everywhere(Shared::Theme, false))));
     h.send(Msg::Settings(settings::Msg::Appearance(AppearanceChange::Theme("amber".to_owned()))));
     assert_eq!(h.env().theme().id(), "amber", "{}", h.screen());
     let written = fs::read_to_string(&path).expect("qfocus's file");
     assert!(written.contains("theme = \"amber\""), "{written}");
-    let family = fs::read_to_string(&shared).expect("the family's file");
-    assert!(family.contains("theme = \"nordic\""), "{family}");
+    let shared_file = fs::read_to_string(&shared).expect("the shared file");
+    assert!(shared_file.contains("theme = \"nordic\""), "{shared_file}");
     done(&dir);
 }
 

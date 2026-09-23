@@ -16,7 +16,7 @@
 
 **quvyta-focus** tracks what you focus on, from the terminal. You keep a short list of the things
 you work on, start a counter on one of them, and see where your time went in day, week, month
-and year charts. It is part of the Quvyta family of terminal applications, is built on
+and year charts. It is part of the Quvyta ecosystem of terminal applications, is built on
 [quvyta-framework](https://github.com/quvyta/framework) and is open source under the MIT licence.
 
 > **Beta.** qfocus is new. Its records are written carefully, but the interface and the command
@@ -45,7 +45,7 @@ and year charts. It is part of the Quvyta family of terminal applications, is bu
   interface.
 
 The interface follows your system language (nine are included, see [Languages](#languages)) and
-uses the family's themes, icons, keys and mouse behaviour.
+uses the themes, icons, keys and mouse behaviour every Quvyta application shares.
 
 ## Install
 
@@ -172,7 +172,7 @@ The time of the last question is kept in a file named `update-check`:
 | macOS | `~/Library/Application Support/Quvyta/focus/update-check` |
 | Windows | `%LOCALAPPDATA%\Quvyta\focus\update-check` |
 
-To turn it off, switch off **Say when an update is out** in **Settings**, right under the appearance, or on the last page of the first start. The switch belongs to the whole Quvyta family: it is `update-notice = false` in the shared `quvyta.conf` beside `focus.conf`, and turning it off stops the question in every Quvyta application. While it is off, qfocus asks nothing at all.
+To turn it off, switch off **Say when an update is out** in **Settings**, right under the appearance, or on the last page of the first start. The switch belongs to the whole Quvyta ecosystem: it is `update-notice = false` in the shared `quvyta.conf` beside `focus.conf`, and turning it off stops the question in every Quvyta application. While it is off, qfocus asks nothing at all.
 
 Apart from that question, qfocus connects to nothing.
 

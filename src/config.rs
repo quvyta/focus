@@ -1,15 +1,15 @@
-//! Where qfocus keeps its settings: `focus.conf` in the Quvyta family's folder, next to the other
-//! applications of the family, and its other configuration files in the `focus/` folder beside
+//! Where qfocus keeps its settings: `focus.conf` in the shared Quvyta folder, next to the other
+//! Quvyta applications, and its other configuration files in the `focus/` folder beside
 //! it.
 //!
 //! ```text
 //! ~/.config/quvyta/
-//!     quvyta.conf     the language, theme and icons the family shares
+//!     quvyta.conf     the language, theme and icons every Quvyta application shares
 //!     focus.conf      qfocus's settings
 //!     focus/          its other configuration files
 //! ```
 //!
-//! The language, the theme and the icons belong to the whole family: `focus.conf` either names
+//! The language, the theme and the icons belong to the whole ecosystem: `focus.conf` either names
 //! qfocus's own value or `"quvyta"`, which means "follow `quvyta.conf`". [`preferences`] resolves
 //! them before the runtime starts, so the first frame is already in the right language.
 //!
@@ -26,12 +26,12 @@ use qframe::storage::{Family, Preferences, Settings, config_dir};
 
 use crate::prefs::Prefs;
 
-/// The application's id in the family: its settings file is `focus.conf` and its other files are
+/// The application's id in the ecosystem: its settings file is `focus.conf` and its other files are
 /// under `focus/`.
 pub const APP: &str = "focus";
 
 /// The folder under the platform's config directory that held `settings.toml` before. On Linux
-/// it is the family's `focus/` folder itself, so only the settings file moves.
+/// it is the shared Quvyta `focus/` folder itself, so only the settings file moves.
 const LEGACY: &str = "quvyta/focus";
 
 /// The settings file's name in [`LEGACY`].
@@ -48,7 +48,7 @@ pub struct Loaded {
     pub left_behind: Vec<Diagnostic>,
 }
 
-/// Brings the old settings over and reads them from the platform's family folder. Without a home
+/// Brings the old settings over and reads them from the platform's shared Quvyta folder. Without a home
 /// folder the settings stay in memory and say why.
 #[must_use]
 pub fn load() -> Loaded {
@@ -61,7 +61,7 @@ pub fn load() -> Loaded {
     }
 }
 
-/// [`load`] with `folder` as the family's folder and `legacy` as the folder the old
+/// [`load`] with `folder` as the shared Quvyta folder and `legacy` as the folder the old
 /// `settings.toml` may be in, so a test never touches the user's own settings.
 #[must_use]
 pub fn load_in(folder: &Path, legacy: &Path) -> Loaded {
@@ -70,28 +70,28 @@ pub fn load_in(folder: &Path, legacy: &Path) -> Loaded {
 }
 
 /// The language, theme and icons as qfocus sees them: its own when its file names one, else the
-/// family's, else what this machine asks for.
+/// shared one, else what this machine asks for.
 #[must_use]
 pub fn preferences() -> Preferences {
     Family::QUVYTA.preferences(APP, &spoken())
 }
 
-/// [`preferences`] with `folder` as the family's folder, so a test never touches the user's own
+/// [`preferences`] with `folder` as the shared Quvyta folder, so a test never touches the user's own
 /// settings.
 #[must_use]
 pub fn preferences_in(folder: &Path) -> Preferences {
     Family::QUVYTA.preferences_in(folder, APP, &spoken())
 }
 
-/// Where the family's update notice is kept and where qfocus remembers when it last asked
+/// Where the Quvyta-wide update notice is kept and where qfocus remembers when it last asked
 /// whether a newer version of itself is out.
 ///
-/// The switch is the family's, one for every Quvyta application, so it is read from the shared
+/// The switch is the ecosystem's, one for every Quvyta application, so it is read from the shared
 /// `quvyta.conf` rather than from `focus.conf`. A test gives folders of its own, so nothing it
 /// does reads or turns off the person's own switch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateFolders {
-    /// The family's configuration folder, whose shared file holds the switch.
+    /// The shared Quvyta configuration folder, whose shared file holds the switch.
     pub config: PathBuf,
     /// qfocus's state folder, which remembers when the question was last asked.
     pub state: PathBuf,
@@ -102,8 +102,8 @@ impl UpdateFolders {
     /// switch or the last question and so nothing is asked.
     #[must_use]
     pub fn here() -> Option<Self> {
-        let family = Family::QUVYTA;
-        family.config_dir().zip(family.state_dir(APP)).map(|(config, state)| Self { config, state })
+        let quvyta = Family::QUVYTA;
+        quvyta.config_dir().zip(quvyta.state_dir(APP)).map(|(config, state)| Self { config, state })
     }
 }
 
@@ -118,7 +118,7 @@ pub fn spoken() -> I18n {
     i18n
 }
 
-/// Moves the old settings into the family's layout and returns what stayed behind.
+/// Moves the old settings into the shared Quvyta layout and returns what stayed behind.
 ///
 /// Only an old settings file is a reason to look. Where the old folder and `focus/` are one
 /// folder under two spellings (a file system that ignores case) the framework could take them
@@ -131,9 +131,9 @@ fn adopt(folder: &Path, legacy: &Path) -> Vec<Diagnostic> {
     Family::QUVYTA.adopt_in(folder, APP, legacy).diagnostics().to_vec()
 }
 
-/// `settings` checked against qfocus's keys and healed. Being a member of the family makes
+/// `settings` checked against qfocus's keys and healed. Being a member of the ecosystem makes
 /// `"quvyta"` a valid value of the shared keys, so healing does not throw away a file that says
-/// qfocus follows the family.
+/// qfocus follows the ecosystem.
 fn checked(settings: Settings) -> Settings {
     settings.member_of(&Family::QUVYTA).schema(Prefs::schema()).self_heal(true)
 }

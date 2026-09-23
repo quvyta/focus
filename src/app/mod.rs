@@ -92,7 +92,7 @@ pub fn run() -> io::Result<()> {
         .config_dir()
         .map(|_| Setup::new(Family::QUVYTA, crate::config::APP, &i18n, Msg::Setup).on_finish(Msg::SetUp))
         .filter(Setup::needed);
-    // The shared look is resolved before the first frame, so the family's language and theme are
+    // The shared look is resolved before the first frame, so the shared language and theme are
     // in force from the start; the rows on the Settings page write it back.
     let preferences = match &setup {
         Some(setup) => setup.preferences().clone(),
@@ -305,15 +305,15 @@ pub struct QFocus {
     prefs: Prefs,
     /// The settings file, with the framework's keys and qfocus's own.
     settings: Settings,
-    /// The rows every application of the family shows for its look, and what they write.
+    /// The rows every Quvyta application shows for its look, and what they write.
     appearance: Appearance,
     /// The first-run wizard, while qfocus has no settings file of its own; `None` once it is
     /// over and on every start after it.
     setup: Option<Setup<Msg>>,
-    /// The family's folder when it is not this platform's own, for a test; the appearance is
+    /// The shared Quvyta folder when it is not this platform's own, for a test; the appearance is
     /// rebuilt over it when the wizard finishes.
     config_folder: Option<PathBuf>,
-    /// Where the family's update notice is kept, or `None` where qfocus asks for no newer version.
+    /// Where the Quvyta-wide update notice is kept, or `None` where qfocus asks for no newer version.
     updates: Option<crate::config::UpdateFolders>,
     page: Page,
     today: Today,
@@ -363,7 +363,7 @@ impl QFocus {
 
     /// The application over `store`. `on_disk` says whether the store is a real folder, `offset`
     /// is the local time zone if known, `clock` reads the clocks, `settings` is the settings
-    /// file, from which the preferences are read, and `appearance` holds the family's shared look
+    /// file, from which the preferences are read, and `appearance` holds the shared look
     /// and writes a change to it.
     ///
     /// A running file the last run left is not looked at here but in [`App::init`], where the
@@ -414,13 +414,13 @@ impl QFocus {
         app
     }
 
-    /// The application with the first-run wizard open, writing into `folder` as the family's
+    /// The application with the first-run wizard open, writing into `folder` as the ecosystem's
     /// folder when it is not this platform's own. Only a [`Setup`] that is still
     /// [needed](Setup::needed) is worth handing over.
     #[must_use]
     pub fn with_setup(mut self, setup: Setup<Msg>, folder: Option<PathBuf>) -> Self {
         self.setup = Some(setup);
-        // The wizard's last step shows the family's update notice; like everything else there it
+        // The wizard's last step shows the Quvyta-wide update notice; like everything else there it
         // is held until Finish, so a wizard left half-way writes nothing.
         self.appearance = self.appearance.clone().without_saving();
         self.config_folder = folder;

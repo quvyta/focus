@@ -1,8 +1,8 @@
-//! The family's update notice: qfocus asks once at start whether a newer version is out while the
-//! family's switch is on, says so in the corner when one is, and the switch on the Settings page,
-//! or on the wizard's last step, turns the question off for the whole family.
+//! The Quvyta-wide update notice: qfocus asks once at start whether a newer version is out while the
+//! ecosystem's switch is on, says so in the corner when one is, and the switch on the Settings page,
+//! or on the wizard's last step, turns the question off for the whole ecosystem.
 //!
-//! Every test keeps the family's folder and qfocus's state folder in a temporary root, so none
+//! Every test keeps the shared Quvyta folder and qfocus's state folder in a temporary root, so none
 //! reads or turns off the person's own switch; the harness answers the question itself and never
 //! reaches the network.
 
@@ -18,13 +18,13 @@ const NEWER: &str = "9.4.7";
 /// The words of the switch's row, the framework's own.
 const ROW: &str = "Say when an update is out";
 
-/// The folders of the update notice under `root`: the family's folder is the one the appearance
+/// The folders of the update notice under `root`: the shared Quvyta folder is the one the appearance
 /// writes to, so the switch and the question read the same file.
 fn folders(root: &Path) -> UpdateFolders {
     UpdateFolders { config: root.join("config"), state: root.join("state") }
 }
 
-/// qfocus with records in `root/data`, its family's folder in `root/config`, asking for updates
+/// qfocus with records in `root/data`, the shared Quvyta folder in `root/config`, asking for updates
 /// over `updates`, as a person starts it once the wizard is behind them.
 fn started(root: &Path, clock: &FakeClock, updates: Option<UpdateFolders>) -> Harness<QFocus> {
     let config = root.join("config");
@@ -44,7 +44,7 @@ fn click_switch(h: &mut Harness<QFocus>) {
     h.advance(Duration::from_millis(100));
 }
 
-/// What the family's file says of the switch, or `None` when the file does not name it.
+/// What the shared file says of the switch, or `None` when the file does not name it.
 fn written_switch(root: &Path) -> Option<String> {
     let text = fs::read_to_string(root.join("config").join("quvyta.conf")).ok()?;
     text.lines().find(|line| line.starts_with("update-notice")).map(str::to_owned)
@@ -75,7 +75,7 @@ fn a_newer_version_is_asked_for_once_with_qfocus_own_name_and_said_in_the_corner
 }
 
 #[test]
-fn the_switch_on_the_settings_page_turns_the_question_off_for_the_family_and_back_on() {
+fn the_switch_on_the_settings_page_turns_the_question_off_for_the_ecosystem_and_back_on() {
     let root = temp("updates-switch");
     let clock = FakeClock::new();
     let mut h = started(&root, &clock, Some(folders(&root)));
@@ -89,7 +89,7 @@ fn the_switch_on_the_settings_page_turns_the_question_off_for_the_family_and_bac
     assert!(row < time, "and before qfocus's own rows:\n{screen}");
 
     click_switch(&mut h);
-    assert!(!Family::QUVYTA.update_notice_in(&root.join("config")), "the family's file says off:\n{}", h.screen());
+    assert!(!Family::QUVYTA.update_notice_in(&root.join("config")), "the shared file says off:\n{}", h.screen());
     assert_eq!(written_switch(&root).as_deref(), Some("update-notice = false"));
 
     let mut off = started(&root, &clock, Some(folders(&root)));
@@ -106,7 +106,7 @@ fn the_switch_on_the_settings_page_turns_the_question_off_for_the_family_and_bac
 }
 
 #[test]
-fn without_the_familys_folders_nothing_is_asked_and_no_switch_is_offered() {
+fn without_the_shared_folders_nothing_is_asked_and_no_switch_is_offered() {
     let root = temp("updates-none");
     let clock = FakeClock::new();
     let mut h = started(&root, &clock, None);

@@ -81,7 +81,7 @@ impl Timed {
 /// Something that happened on the screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
-    /// An appearance row of the family's own section was changed.
+    /// An appearance row of the ecosystem's own section was changed.
     Appearance(AppearanceChange),
     /// The day the week starts on was chosen, by position among the weekdays.
     WeekStart(usize),
@@ -149,7 +149,7 @@ pub struct Settings {
     short: Option<(Timed, Duration)>,
     /// The day the older records are deleted before, once chosen; until then a year before today.
     older: Option<Date>,
-    /// Whether the family's update notice is offered, right after the appearance section: only
+    /// Whether the Quvyta-wide update notice is offered, right after the appearance section: only
     /// where qfocus asks for its updates, so the page offers no switch that would do nothing.
     updates: bool,
 }
@@ -170,7 +170,7 @@ impl Settings {
         }
     }
 
-    /// The same screen offering the family's update notice (`true`) right after the appearance
+    /// The same screen offering the Quvyta-wide update notice (`true`) right after the appearance
     /// section, or not.
     #[must_use]
     pub fn with_updates(mut self, offered: bool) -> Self {
@@ -264,7 +264,7 @@ pub fn update<M: From<Msg> + Clone + Send + 'static>(
 
 /// Draws the screen: the repairs until read, the last failure, the list of settings and, under
 /// it, the danger actions with their marks. `today` is the local day, where the older records'
-/// date starts from. `appearance` draws the rows the whole family shares. `can_edit` false mutes
+/// date starts from. `appearance` draws the rows the whole ecosystem shares. `can_edit` false mutes
 /// the actions, for an instance that may not write.
 pub fn view<M: From<Msg> + Clone + Send + 'static>(
     screen: &Settings,
@@ -290,11 +290,11 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
                 warning_line(t!("settings.store-failed", reason = reason.clone()), ui);
             }
             let list = SettingsList::show(ui, |list| {
-                // Language, theme, icons, motion and the pillar are the family's own section:
+                // Language, theme, icons, motion and the pillar are the ecosystem's own section:
                 // every Quvyta application shows the same rows, and each shared row carries the
                 // choice of changing it everywhere or here only.
                 appearance.section(list, |change| M::from(Msg::Appearance(change)));
-                // The family's own switch and words, the same in every application that asks.
+                // The ecosystem's own switch and words, the same in every application that asks.
                 if screen.updates {
                     appearance.updates(list, |change| M::from(Msg::Appearance(change)));
                 }

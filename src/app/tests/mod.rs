@@ -102,7 +102,7 @@ fn app_at(dir: &Path, clock: &FakeClock) -> QFocus {
     )
 }
 
-/// The family's appearance over `dir`: a test never reads or writes the person's own settings.
+/// The shared appearance over `dir`: a test never reads or writes the person's own settings.
 fn appearance(dir: &Path) -> Appearance {
     Appearance::new(Family::QUVYTA, crate::config::APP, crate::config::preferences_in(dir)).in_folder(dir)
 }

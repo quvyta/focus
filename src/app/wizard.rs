@@ -11,10 +11,10 @@
 //! as being away, and the ceiling a session is flagged over. On Finish the framework writes the
 //! shared keys and makes `focus.conf`; the four go into that same file straight after.
 //!
-//! Where qfocus asks for its updates, the same step ends with the family's update notice, the
+//! Where qfocus asks for its updates, the same step ends with the Quvyta-wide update notice, the
 //! switch of the one thing qfocus does over the network, so it can be turned off before it is
 //! ever done. It is held like the rest and written on Finish only when it differs from what the
-//! family's file says; nothing is asked while the wizard is open.
+//! shared file says; nothing is asked while the wizard is open.
 
 use qframe::prelude::*;
 use qframe::storage::Family;
@@ -93,7 +93,7 @@ impl QFocus {
         ui.add_with(ScrollView::new(), |ui| {
             SettingsList::show(ui, |list| {
                 settings::time_rows(list, &self.settings_screen, &self.prefs, week_start, &units.as_units());
-                // The family's update notice, where qfocus asks for its updates: the one thing
+                // The Quvyta-wide update notice, where qfocus asks for its updates: the one thing
                 // qfocus would do over the network, offered before it is ever done.
                 if self.updates.is_some() {
                     self.appearance.updates(list, |change| Msg::Settings(settings::Msg::Appearance(change)));

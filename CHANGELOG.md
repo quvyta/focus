@@ -2,6 +2,12 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.12 - 2026-09-23
+
+### Changed
+
+- The README speaks of the Quvyta ecosystem where it said the Quvyta family.
+
 ## 0.1.11 - 2026-09-23
 
 ### Added

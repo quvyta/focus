@@ -1,7 +1,7 @@
 //! The first start: the wizard opens while qfocus has no settings file of its own, writes
 //! nothing at all until it finishes, and then writes both files in one go.
 //!
-//! Every test lives in a temporary root: the family's folder, the records and the fonts the
+//! Every test lives in a temporary root: the shared Quvyta folder, the records and the fonts the
 //! appearance step looks at are all inside it, so neither the person's settings nor a real font
 //! is ever touched.
 
@@ -38,7 +38,7 @@ pub(super) fn start_asking(
         .font_dirs(vec![fonts]);
     let setup = Some(setup).filter(Setup::needed);
     // While the wizard is open the preferences come from it: resolving them the usual way would
-    // make the family's file before anything had been chosen.
+    // make the shared file before anything had been chosen.
     let preferences = match &setup {
         Some(setup) => setup.preferences().clone(),
         None => crate::config::preferences_in(&config),
@@ -54,7 +54,7 @@ pub(super) fn start_asking(
     harness(app.update_notice(updates), width, height)
 }
 
-/// What the family's folder holds, by name, in order; empty when there is no folder at all.
+/// What the shared Quvyta folder holds, by name, in order; empty when there is no folder at all.
 fn names(root: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(root.join("config")) else { return Vec::new() };
     let mut names: Vec<String> =
@@ -128,9 +128,9 @@ fn half_way_through_the_wizard_nothing_has_been_written_at_all() {
     h.advance(Duration::from_millis(100));
 
     assert_eq!(h.app().prefs(), &chosen(), "the choices are held in memory");
-    assert!(!config.exists(), "the family's folder is not even made");
+    assert!(!config.exists(), "the shared Quvyta folder is not even made");
     assert!(!config.join("focus.conf").exists(), "qfocus's own file is not made");
-    assert!(!config.join("quvyta.conf").exists(), "the family's file is not made");
+    assert!(!config.join("quvyta.conf").exists(), "the shared file is not made");
 
     // Next start: the wizard is there again, with nothing remembered.
     let again = start(&root, &clock, 80, 30);
@@ -158,7 +158,7 @@ fn finishing_writes_both_files_and_qfocus_own_settings_are_the_ones_chosen() {
     for line in ["week-start = \"saturday\"", "day-rollover = \"04:00\"", "idle-after = 300", "ceiling = 21600"] {
         assert!(text.contains(line), "`{line}` is missing:\n{text}");
     }
-    let shared = fs::read_to_string(root.join("config").join("quvyta.conf")).expect("the family's file");
+    let shared = fs::read_to_string(root.join("config").join("quvyta.conf")).expect("the shared file");
     assert!(shared.contains("theme = \"nordic\""), "{shared}");
 
     // Next start: the file is there, so nothing is asked and the settings are the chosen ones.
