@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use qframe::date::TimeOfDay;
+use qframe::icons::GlyphMode;
 use qframe::prelude::*;
 use qframe::widgets::{
     ContextItem, DurationInput, EmptyState, Legend, Segmented, Span, TextInput, TimeBlock, Timeline, Toast, Tree,
@@ -882,7 +883,7 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
                 .on_press(M::from(Msg::Activate(Row::AddCategory.key())));
             ui.add(EmptyState::new(t!("today.empty-title")).message(t!("today.empty-message")).action(action)).fill();
         } else {
-            let roots = nodes(screen, catalog, totals, units, can_start);
+            let roots = nodes(screen, catalog, totals, units, (can_start, ui.env().icons().mode()));
             let menu = MenuNames::of(catalog, can_start, suggested);
             ui.add(
                 Tree::new(roots)
@@ -1059,8 +1060,14 @@ fn category_name(catalog: &Catalog, id: Option<Id>) -> String {
 
 /// The rows of the tree: open categories with their focuses, the add-focus row under the
 /// category the selection is in, and the add-category row at the end.
-fn nodes(screen: &Today, catalog: &Catalog, totals: &DayTotals, units: &Units<'_>, can_start: bool) -> Vec<TreeNode> {
-    let none = t!("today.none");
+fn nodes(
+    screen: &Today,
+    catalog: &Catalog,
+    totals: &DayTotals,
+    units: &Units<'_>,
+    (can_start, glyphs): (bool, GlyphMode),
+) -> Vec<TreeNode> {
+    let none = super::in_glyphs(t!("today.none"), glyphs);
     let detail = |seconds: u64| if seconds == 0 { none.clone() } else { short(seconds, units) };
     let with_add = screen.selected_category(catalog);
     let mut roots: Vec<TreeNode> = visible_categories(catalog)

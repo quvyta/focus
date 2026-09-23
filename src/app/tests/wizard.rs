@@ -17,6 +17,17 @@ use crate::ui::settings;
 /// [`crate::app::run`] builds it: the wizard when there is no settings file, and nothing at all
 /// once there is one.
 pub(super) fn start(root: &Path, clock: &FakeClock, width: u16, height: u16) -> Harness<QFocus> {
+    start_asking(root, clock, width, height, None)
+}
+
+/// [`start`], asking for updates over `updates` as a person's qfocus does.
+pub(super) fn start_asking(
+    root: &Path,
+    clock: &FakeClock,
+    width: u16,
+    height: u16,
+    updates: Option<crate::config::UpdateFolders>,
+) -> Harness<QFocus> {
     let config = root.join("config");
     let fonts = root.join("fonts");
     let i18n = crate::config::spoken();
@@ -40,7 +51,7 @@ pub(super) fn start(root: &Path, clock: &FakeClock, width: u16, height: u16) -> 
     if let Some(setup) = setup {
         app = app.with_setup(setup, Some(config));
     }
-    harness(app, width, height)
+    harness(app.update_notice(updates), width, height)
 }
 
 /// What the family's folder holds, by name, in order; empty when there is no folder at all.

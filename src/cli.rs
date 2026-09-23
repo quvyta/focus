@@ -854,6 +854,24 @@ mod tests {
     }
 
     #[test]
+    fn a_name_of_nothing_but_spaces_is_a_missing_name() {
+        assert_eq!(parse(&args(&["start", " ", "  "])), Err(ParseError::MissingName));
+        assert_eq!(
+            parse(&args(&["start", " Rust "])),
+            Ok(Some(Request { command: Command::Start { name: "Rust".to_owned(), switch: false }, json: false }))
+        );
+    }
+
+    #[test]
+    fn run_gives_the_exit_code_of_what_it_answered() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        assert_eq!(run(&args(&["--help"]), &mut out, &mut err), Some(ExitCode::from(0)));
+        assert_eq!(run(&args(&["dance"]), &mut out, &mut err), Some(ExitCode::from(1)));
+        assert_eq!(run(&args(&["start"]), &mut out, &mut err), Some(ExitCode::from(1)));
+    }
+
+    #[test]
     fn run_answers_help_and_unknown_commands_without_touching_data() {
         let mut out = Vec::new();
         let mut err = Vec::new();
@@ -1060,6 +1078,49 @@ mod tests {
     }
 
     #[test]
+    fn a_lock_that_cannot_be_taken_blocks_writing_and_says_why() {
+        let dir = temp("lock-broken");
+        let paths = seed(&dir);
+        // A folder where the lock file belongs: no instance holds it, and none can take it.
+        fs::create_dir_all(paths.lock_file()).expect("block");
+        let start = go(&paths, at(0), &["start", "Rust"]);
+        assert_eq!(start.code, EXIT_LOCKED);
+        let lines: Vec<&str> = start.err.lines().collect();
+        assert_eq!(lines[0], "An open qfocus window is writing; close it or use that window.");
+        assert!(lines.iter().any(|line| line.contains("cannot take the lock")), "{}", start.err);
+        assert!(!paths.running_file().exists());
+        done(&dir);
+    }
+
+    #[test]
+    fn start_says_so_when_the_running_file_cannot_be_written() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = temp("start-unwritable");
+        let paths = seed(&dir);
+        // The lock file is there already, so the lock can still be taken in a folder nothing new
+        // may be created in.
+        drop(AppLock::acquire(&paths.lock_file()).expect("lock").expect("free"));
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).expect("read-only");
+        let privileged = fs::write(dir.join("probe"), "").is_ok();
+        let start = go(&paths, at(0), &["start", "Rust"]);
+        let json = go(&paths, at(0), &["start", "Rust", "--json"]);
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).expect("writable again");
+        if privileged {
+            // A user the folder's permissions do not stop cannot see this refusal.
+            done(&dir);
+            return;
+        }
+        assert_eq!(start.code, EXIT_NOT_FOUND);
+        assert!(start.out.is_empty(), "{}", start.out);
+        let path = paths.running_file().display().to_string();
+        assert!(start.err.starts_with(&format!("{path}: ")), "{}", start.err);
+        assert_eq!(json.code, EXIT_NOT_FOUND);
+        assert_eq!(json.out, format!("{{\"error\":\"write-failed\",\"path\":{}}}\n", json_string(&path)));
+        assert!(!paths.running_file().exists());
+        done(&dir);
+    }
+
+    #[test]
     fn stop_keeps_the_running_file_when_the_record_cannot_be_written() {
         let dir = temp("unwritable");
         let paths = seed(&dir);
@@ -1089,6 +1150,7 @@ mod tests {
         let status = go(&paths, at(0), &["status"]);
         assert_eq!(status.code, EXIT_NOT_FOUND);
         assert!(status.err.contains("cannot be read"), "{}", status.err);
+        assert!(status.err.lines().count() > 1, "what is wrong with the file follows: {}", status.err);
         assert_eq!(go(&paths, at(0), &["stop"]).code, EXIT_NOT_FOUND);
         assert_eq!(go(&paths, at(0), &["start", "Rust"]).code, EXIT_NOT_FOUND);
         assert_eq!(fs::read_to_string(paths.running_file()).expect("still there"), "focus = 7\n");
@@ -1161,6 +1223,58 @@ mod tests {
         // Stopped in the ordinary way: measured by the timer, not recovered, flags kept.
         assert_eq!(store.sessions[0].source, Source::Timer);
         assert_eq!(store.sessions[0].flags, vec![Flag::OverCeiling]);
+        done(&dir);
+    }
+
+    #[test]
+    fn a_paused_counter_nobody_measures_stays_on_its_break_until_stopped() {
+        let dir = temp("paused-none");
+        let paths = seed(&dir);
+        let running = Running {
+            focus: Id::new(1, 1),
+            started: WALL,
+            offset_minutes: OFFSET,
+            spans: vec![
+                Span::new(SpanKind::Work, 0, 600, ClockSource::Mono),
+                Span::new(SpanKind::Pause, 600, 280, ClockSource::Mono),
+            ],
+            paused: true,
+            refreshed: WALL + 880,
+            flags: Vec::new(),
+            target: None,
+            idle_from: None,
+            watch: Watch::None,
+        };
+        crate::store::running::save(&paths.running_file(), &running).expect("save");
+        let status = go(&paths, at(1_800), &["status", "--json"]);
+        assert_eq!(
+            status.out,
+            format!(
+                "{{\"running\":true,\"focus\":\"Rust\",\"category\":\"Work\",\"seconds\":600,\"paused\":true,\"started\":{WALL}}}\n"
+            )
+        );
+        let stopped = go(&paths, at(1_800), &["stop"]);
+        assert_eq!(stopped.out, "Rust · 10 min\n");
+        let store = Store::open_read_only(paths.clone());
+        assert_eq!(store.sessions[0].ended, WALL + 1_800);
+        assert_eq!(store.sessions[0].work_seconds(), 600, "the break went on while nobody watched");
+        assert_eq!(store.sessions[0].spans.last().map(|span| span.kind), Some(SpanKind::Pause));
+        done(&dir);
+    }
+
+    #[test]
+    fn without_a_time_zone_records_and_days_are_in_utc() {
+        let dir = temp("no-zone");
+        let paths = seed(&dir);
+        let unzoned = |seconds| Moment { offset_minutes: None, ..at(seconds) };
+        assert_eq!(go(&paths, unzoned(0), &["start", "Rust"]).code, EXIT_OK);
+        // 23:30 UTC: still the 18th in UTC, already the 19th an hour east of it.
+        let late = 13 * 3_600 + 1_800;
+        let today = go(&paths, unzoned(late), &["today", "--json"]);
+        assert!(today.out.starts_with("{\"date\":\"2026-09-18\","), "{}", today.out);
+        assert_eq!(go(&paths, unzoned(late), &["stop"]).code, EXIT_OK);
+        let store = Store::open_read_only(paths.clone());
+        assert_eq!(store.sessions[0].offset_minutes, 0);
         done(&dir);
     }
 

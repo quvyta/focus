@@ -12,7 +12,9 @@ mod quit;
 mod records;
 mod recover;
 mod settings;
+mod sweep;
 mod tree;
+mod updates;
 mod wizard;
 
 use std::cell::Cell;
@@ -221,12 +223,25 @@ fn history(dir: &Path) {
     recorded(dir, 24, rust, 29 * day, work(3_600), "");
 }
 
-/// Every screen a person meets in a day of use, in `code` at forty columns: the Today page
+/// How the tour draws: the terminal's width and the glyph column in force.
+#[derive(Clone, Copy)]
+struct Look {
+    width: u16,
+    glyphs: GlyphMode,
+}
+
+impl Look {
+    /// Forty columns in Unicode glyphs: the narrowest terminal qfocus promises to read in.
+    const NARROW: Self = Self { width: 40, glyphs: GlyphMode::Unicode };
+}
+
+/// Every screen a person meets in a day of use, in `code` at the width and glyphs of `look`: the Today page
 /// empty and full, the counter and its break, the goal and countdown fields, each scale of
 /// the charts with a bar picked, each view of the records with the form and the spans, the
 /// whole settings page, and the quit and purge dialogs. Each comes back with its name and the
 /// harness it was drawn in, so a check can look at the cells as well as the text.
-fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
+fn tour(code: &str, name: &str, look: Look, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
+    let width = look.width;
     // Toasts are looked at where they are raised, then let go, so they do not stand over
     // the next screen.
     let settle = |h: &mut Harness<QFocus>| {
@@ -236,8 +251,8 @@ fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
     // The first screen anyone meets: both steps of the setup wizard, in a root of its own so
     // nothing of the person's is read or written.
     let first = temp(&format!("tour-first-{name}"));
-    let mut h = wizard::start(&first, &clock, 40, 30);
-    h.set_locale(code);
+    let mut h = wizard::start(&first, &clock, width, 30);
+    h.set_locale(code).set_glyph_mode(look.glyphs);
     check("wizard, appearance", &h);
     h.send(Msg::Setup(qframe::widgets::SetupMsg::Next));
     check("wizard, the day", &h);
@@ -245,8 +260,8 @@ fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
     done(&first);
 
     let empty = temp(&format!("tour-empty-{name}"));
-    let mut h = harness(app_at(&empty, &clock), 40, 24);
-    h.set_locale(code);
+    let mut h = harness(app_at(&empty, &clock), width, 24);
+    h.set_locale(code).set_glyph_mode(look.glyphs);
     check("today, empty", &h);
     settle(&mut h);
     done(&empty);
@@ -259,8 +274,8 @@ fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
     tree.categories[0].focuses[0].goal = Some(Goal { amount: 3_600, period: Period::Week });
     fs::write(store.paths.tree_file(), tree.write()).expect("tree written");
     drop(store);
-    let mut h = harness(app_at(&dir, &clock), 40, 30);
-    h.set_locale(code);
+    let mut h = harness(app_at(&dir, &clock), width, 30);
+    h.set_locale(code).set_glyph_mode(look.glyphs);
     check("today", &h);
     settle(&mut h);
     let rust = Row::Focus(Id::new(2, 2)).key();
@@ -323,7 +338,7 @@ fn tour(code: &str, name: &str, check: &mut dyn FnMut(&str, &Harness<QFocus>)) {
     h.press("delete");
     check("records, one removed", &h);
     settle(&mut h);
-    h.resize(40, 160);
+    h.resize(width, 160);
     h.press("4");
     check("settings", &h);
     settle(&mut h);

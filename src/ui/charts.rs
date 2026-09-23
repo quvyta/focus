@@ -316,7 +316,8 @@ fn day_and_month(date: Date) -> String {
 /// The line under a chart that reads the picked bar, or invites picking one.
 fn readout<M: 'static>(picked: Option<String>, hint: String, ui: &mut View<'_, M>) {
     let role = if picked.is_some() { "body" } else { "faint" };
-    ui.add(Text::new(picked.unwrap_or(hint)).role(role)).fill_width();
+    let line = super::in_glyphs(picked.unwrap_or(hint), ui.env().icons().mode());
+    ui.add(Text::new(line).role(role)).fill_width();
 }
 
 /// The day: the hours as bars, then the day's categories as one stacked bar with its legend and
@@ -484,7 +485,8 @@ fn month<M: From<Msg> + Clone + Send + 'static>(
     ui.add(BarChart::<M>::new(bars).gap(0)).fill_width();
     let (count, mean) = stats::session_count_and_mean(sessions, range, rollover);
     let count = u32::try_from(count).unwrap_or(u32::MAX);
-    ui.add(Text::new(t!("charts.sessions", n = count, mean = short(mean, units))).role("secondary")).fill_width();
+    let line = super::in_glyphs(t!("charts.sessions", n = count, mean = short(mean, units)), ui.env().icons().mode());
+    ui.add(Text::new(line).role("secondary")).fill_width();
 }
 
 /// The year: a grid of the last 52 weeks with today at the right edge, cut to the newest weeks

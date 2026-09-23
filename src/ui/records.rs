@@ -831,6 +831,7 @@ fn dump<M: From<Msg> + Clone + Send + 'static>(
 ) {
     let (_, focus) = names(catalog, session.focus);
     let title = t!("records.dump-title", focus = focus, date = date_of(session.started, session.offset_minutes));
+    let title = super::in_glyphs(title, ui.env().icons().mode());
     let blocks = session_blocks(session);
     // The strip runs from the session's start to its end across the whole width, so a ten
     // minute break inside an hour is wide enough to see; the day turns at the start, so a

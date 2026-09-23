@@ -266,6 +266,18 @@ mod tests {
     }
 
     #[test]
+    fn sleep_since_the_boot_is_not_a_restart() {
+        let running = counter(Watch::None, STARTED);
+        let now = STARTED + 5 * HOUR;
+        // Booted an hour before the start, and asleep for three of the six hours since.
+        let clocks = Clocks {
+            wall: now,
+            uptime: Uptime { awake: Duration::from_secs(3 * 3_600), elapsed: Duration::from_secs(6 * 3_600) },
+        };
+        assert_eq!(reach(&running, None, clocks, true, never), Reach { until: now, cut: None });
+    }
+
+    #[test]
     fn without_knowing_the_boot_a_counter_nobody_measures_counts_to_now() {
         let running = counter(Watch::None, STARTED);
         let now = STARTED + 20 * HOUR;

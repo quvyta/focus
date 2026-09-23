@@ -784,6 +784,36 @@ mod tests {
     }
 
     #[test]
+    fn a_tick_interval_of_zero_is_read_as_one_second() {
+        let mut timer = Timer::start(focus_id(), at(0), OFFSET).detects_suspend(false).tick_interval(0);
+        // Ten seconds since the last tick, one of which was the expected interval.
+        assert_eq!(timer.tick(at(10)), vec![Notice::Lagged(9, SpanKind::Work)]);
+        assert_eq!(timer.spans(at(10)), vec![slept_work(0, 9), work(9, 1)]);
+        assert_consistent(&timer, at(10));
+    }
+
+    #[test]
+    fn a_sleep_longer_than_the_time_that_passed_is_cut_to_it() {
+        let mut timer = timer();
+        timer.tick(at(10));
+        // A reading behind the last one leaves the session at ten seconds; the next one says ten
+        // seconds were slept, but only three have passed on the session clock since.
+        let behind = Clocks {
+            wall: WALL + 10,
+            uptime: Uptime { awake: Duration::from_secs(3), elapsed: Duration::from_secs(3) },
+        };
+        timer.tick(behind);
+        let now = Clocks {
+            wall: WALL + 13,
+            uptime: Uptime { awake: Duration::from_secs(3), elapsed: Duration::from_secs(13) },
+        };
+        assert_eq!(timer.tick(now), vec![Notice::Suspended(10, SpanKind::Work)]);
+        assert_eq!(timer.elapsed(now), 13);
+        assert_eq!(timer.spans(now), vec![work(0, 10), slept_work(10, 3)]);
+        assert_consistent(&timer, now);
+    }
+
+    #[test]
     fn a_clock_jump_flags_the_session_once_and_removes_no_time() {
         let mut timer = timer();
         timer.tick(at(10));
@@ -826,6 +856,15 @@ mod tests {
         assert_eq!(timer.tick(at(101)), vec![Notice::OverCeiling]);
         assert_eq!(timer.flags(), &[Flag::OverCeiling]);
         assert!(timer.tick(at(200)).is_empty());
+        assert_eq!(timer.flags(), &[Flag::OverCeiling]);
+    }
+
+    #[test]
+    fn the_ceiling_is_twelve_hours_unless_set() {
+        let mut timer = timer();
+        assert_eq!(timer.ceiling_seconds(), 12 * 3_600);
+        assert!(timer.tick(at(12 * 3_600)).is_empty(), "twelve hours is not over it");
+        assert_eq!(timer.tick(at(12 * 3_600 + 1)), vec![Notice::OverCeiling]);
         assert_eq!(timer.flags(), &[Flag::OverCeiling]);
     }
 
@@ -900,6 +939,20 @@ mod tests {
         assert_eq!(session.spans, vec![work(0, 10), slept_work(10, 100), work(110, 30)]);
         assert_eq!(session.ended, WALL + 140);
         assert_eq!(session.flags, vec![Flag::OverCeiling]);
+    }
+
+    #[test]
+    fn the_end_of_a_session_is_its_start_plus_the_session_clock_whatever_the_wall_clock_says() {
+        let mut timer = timer();
+        timer.tick(at(100));
+        // The wall clock is stepped back an hour before the stop, as a time zone fix or a time
+        // daemon would: the record still ends two hundred seconds after it began.
+        let now = clocks(200, 0, -3_600);
+        let session = timer.stop(now, Id::new(5, 5), now.wall);
+        assert_eq!(session.ended, WALL + 200);
+        assert_eq!(session.spans, vec![work(0, 200)]);
+        assert_eq!(session.flags, vec![Flag::SuspectClock]);
+        assert!(check(&session.spans, 200).is_empty());
     }
 
     #[test]
@@ -1023,6 +1076,14 @@ mod tests {
         let spans = vec![work(0, 40), work(40, 60)];
         let timer = Timer::restore(focus_id(), WALL - 100, OFFSET, spans, false, WALL, WALL, at(0));
         assert_eq!(timer.spans(at(0)), vec![work(0, 100)]);
+    }
+
+    #[test]
+    fn restore_keeps_a_hole_in_the_file_instead_of_stretching_a_span_over_it() {
+        let spans = vec![work(0, 40), work(50, 10)];
+        let timer = Timer::restore(focus_id(), WALL - 60, OFFSET, spans, false, WALL, WALL, at(0));
+        assert_eq!(timer.spans(at(0)), vec![work(0, 40), work(50, 10)], "the hole stays for the check to see");
+        assert!(!check(&timer.spans(at(0)), 60).is_empty());
     }
 
     #[test]
@@ -1180,6 +1241,30 @@ mod tests {
         assert!(!timer.has_unclaimed_idle());
         assert_eq!(timer.spans(at(1_900)), vec![work(0, 600), pause(600, 1_300)]);
         assert_consistent(&timer, at(1_900));
+    }
+
+    #[test]
+    fn resuming_during_a_silence_leaves_it_a_silence() {
+        let mut timer = away_timer();
+        timer.resume(at(1_900));
+        timer.tick(at(2_000));
+        assert!(timer.is_away());
+        assert_eq!(timer.spans(at(2_000)), vec![work(0, 600), idle(600, 1_400)]);
+        assert_eq!(timer.work_seconds(at(2_000)), 600);
+        assert_consistent(&timer, at(2_000));
+    }
+
+    #[test]
+    fn input_coming_back_during_a_break_leaves_the_break_on() {
+        let mut timer = timer();
+        timer.tick(at(600));
+        timer.pause(at(600));
+        timer.idle_over(at(900));
+        timer.tick(at(1_200));
+        assert!(timer.is_paused());
+        assert_eq!(timer.spans(at(1_200)), vec![work(0, 600), pause(600, 600)]);
+        assert_eq!(timer.work_seconds(at(1_200)), 600);
+        assert_consistent(&timer, at(1_200));
     }
 
     #[test]

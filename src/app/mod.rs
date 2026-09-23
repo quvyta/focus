@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use qframe::date::{Date, DateTime, Weekday, local_offset};
 use qframe::prelude::*;
-use qframe::runtime::{Confirm, Task, TaskId, Termination};
+use qframe::runtime::{Confirm, Task, TaskId, Termination, Update};
 use qframe::storage::{Family, Settings, atomic_write};
 use qframe::uptime::Uptime;
 use qframe::widgets::{Appearance, Bar, BarChart, BigText, Modal, Setup, SetupMsg, Span, Toast};
@@ -39,6 +39,7 @@ use crate::ui::{GoalRow, goal_gauges, goal_rows, info_line, warning_line};
 
 mod counter;
 mod data;
+mod updates;
 mod view;
 mod wizard;
 
@@ -103,6 +104,7 @@ pub fn run() -> io::Result<()> {
     if let Some(setup) = setup {
         app = app.with_setup(setup, None);
     }
+    let app = app.update_notice(crate::config::UpdateFolders::here());
     let mut runtime =
         Runtime::new(app).settings(&settings).preferences(&preferences).keymap_source("keymap.toml", KEYMAP);
     for &(file, text) in crate::locales() {
@@ -218,6 +220,8 @@ pub enum Msg {
     /// The wizard wrote the shared keys and made the settings file; qfocus writes its own
     /// settings into it.
     SetUp,
+    /// A newer version of qfocus is out.
+    NewVersion(Update),
 }
 
 impl From<today::Msg> for Msg {
@@ -309,6 +313,8 @@ pub struct QFocus {
     /// The family's folder when it is not this platform's own, for a test; the appearance is
     /// rebuilt over it when the wizard finishes.
     config_folder: Option<PathBuf>,
+    /// Where the family's update notice is kept, or `None` where qfocus asks for no newer version.
+    updates: Option<crate::config::UpdateFolders>,
     page: Page,
     today: Today,
     charts: Charts,
@@ -383,6 +389,7 @@ impl QFocus {
             appearance,
             setup: None,
             config_folder: None,
+            updates: None,
             page: Page::Today,
             today: Today::new(),
             charts: Charts::new(),
@@ -413,6 +420,9 @@ impl QFocus {
     #[must_use]
     pub fn with_setup(mut self, setup: Setup<Msg>, folder: Option<PathBuf>) -> Self {
         self.setup = Some(setup);
+        // The wizard's last step shows the family's update notice; like everything else there it
+        // is held until Finish, so a wizard left half-way writes nothing.
+        self.appearance = self.appearance.clone().without_saving();
         self.config_folder = folder;
         self
     }
@@ -776,7 +786,9 @@ impl App for QFocus {
         let found = self.find_running();
         // On the first start the wizard has the screen, so the appearance rows take the keys.
         let first = if self.setting_up() { wizard::FIRST } else { today::TREE };
-        Command::batch([Command::focus(first), found, self.sync_tick()])
+        // The question for a newer version runs on a thread of its own, so the start never
+        // waits for it; while the wizard is open it waits for the wizard instead.
+        Command::batch([Command::focus(first), found, self.sync_tick(), self.ask_for_update()])
     }
 
     fn before_quit(&self) -> Option<Msg> {
@@ -957,6 +969,7 @@ impl QFocus {
                 None => Command::none(),
             },
             Msg::SetUp => self.finish_setup(),
+            Msg::NewVersion(update) => Command::toast(update.toast()),
         }
     }
 }

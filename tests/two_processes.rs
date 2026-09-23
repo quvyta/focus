@@ -66,6 +66,35 @@ impl Sandbox {
         }
     }
 
+    /// The program at `program` with `words` after it, like [`Sandbox::go`], for the other
+    /// binary. It must end within [`PATIENCE`]: a binary that misread its arguments could open
+    /// the full-screen program instead, and the case fails rather than waits for it.
+    fn go_with(&self, program: &str, words: &[&str]) -> Outcome {
+        let mut child = self
+            .command(program)
+            .args(words)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the binary runs");
+        let deadline = Instant::now() + PATIENCE;
+        while child.try_wait().expect("the binary can be waited for").is_none() {
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("{program} {words:?} did not end within {PATIENCE:?}");
+            }
+            sleep(Duration::from_millis(20));
+        }
+        let output = child.wait_with_output().expect("the binary's answer");
+        Outcome {
+            code: output.status.code().expect("an exit code, not a signal"),
+            out: String::from_utf8(output.stdout).expect("utf-8 on the answer"),
+            err: String::from_utf8(output.stderr).expect("utf-8 on the problems"),
+        }
+    }
+
     /// A command with nothing of the surrounding environment but the search path and the
     /// terminal: `HOME` and every `XDG_*` folder point into the sandbox, so even a bug in the
     /// path code cannot land on the person's records, and the language is fixed so the answers
@@ -436,6 +465,7 @@ fn a_live_instance_holding_the_lock_turns_every_writer_away_and_frees_it_when_ki
 
     let start = sandbox.go(&["start", "Rust"]);
     assert_eq!(start.code, code(EXIT_LOCKED), "{}", start.err);
+    assert_eq!(start.code, 2, "the number the README promises");
     assert_eq!(start.err, "An open qfocus window is writing; close it or use that window.\n");
     assert!(start.out.is_empty(), "{}", start.out);
     assert_eq!(sandbox.go(&["stop"]).code, code(EXIT_LOCKED));
@@ -453,6 +483,63 @@ fn a_live_instance_holding_the_lock_turns_every_writer_away_and_frees_it_when_ki
     let started = sandbox.go(&["start", "Rust"]);
     assert_eq!((started.code, started.out.as_str()), (code(EXIT_OK), "Started Rust.\n"), "{}", started.err);
     sandbox.done();
+}
+
+/// The codes a script reads are the numbers the README gives, whatever the constants are called.
+#[test]
+fn the_exit_codes_are_the_numbers_the_readme_promises() {
+    let sandbox = Sandbox::new("codes");
+    assert_eq!(sandbox.go(&["status"]).code, 4, "nothing running");
+    assert_eq!(sandbox.go(&["stop"]).code, 4, "nothing running");
+    assert_eq!(sandbox.go(&["start", "Cooking"]).code, 1, "not found");
+    assert_eq!(sandbox.go(&["start", "Reading"]).code, 1, "more than one focus");
+    let unknown = sandbox.go(&["dance"]);
+    assert_eq!(unknown.code, 1, "not a command");
+    assert!(unknown.err.contains("dance"), "{}", unknown.err);
+    assert!(!sandbox.paths.running_file().exists());
+    assert_eq!(sandbox.go(&["start", "Rust"]).code, 0, "done");
+    assert_eq!(sandbox.go(&["start", "Home/Reading"]).code, 3, "already running");
+    assert_eq!(sandbox.go(&["status"]).code, 0, "done");
+    sandbox.done();
+}
+
+/// Both binaries are the same program: the one named after the package answers the command line
+/// as `qfocus` does, codes included, and never opens the full-screen program for a command.
+#[test]
+fn the_binary_named_after_the_package_answers_the_command_line_too() {
+    let sandbox = Sandbox::new("package-binary");
+    let other = env!("CARGO_BIN_EXE_quvyta-focus");
+    let version = sandbox.go_with(other, &["--version"]);
+    assert_eq!((version.code, version.out.as_str()), (0, format!("qfocus {}\n", env!("CARGO_PKG_VERSION")).as_str()));
+    let quiet = sandbox.go_with(other, &["status"]);
+    assert_eq!((quiet.code, quiet.out.as_str(), quiet.err.as_str()), (4, "", ""));
+    let started = sandbox.go_with(other, &["start", "Rust"]);
+    assert_eq!((started.code, started.out.as_str()), (0, "Started Rust.\n"), "{}", started.err);
+    assert_eq!(sandbox.counter().focus, Id::new(1, 1), "the qfocus binary sees what the other one started");
+    assert_eq!(sandbox.go_with(other, &["start", "Home/Reading"]).code, 3);
+    sandbox.done();
+}
+
+/// With no `HOME` and no `XDG_DATA_HOME` there is nowhere to write: the command says so and
+/// fails, and nothing is written anywhere.
+#[test]
+fn without_a_data_folder_a_command_fails_and_says_why() {
+    for words in [&["status"][..], &["start", "Rust"][..]] {
+        let output = Command::new(env!("CARGO_BIN_EXE_qfocus"))
+            .env_clear()
+            .env("PATH", std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_owned()))
+            .env("LC_ALL", "en_US.UTF-8")
+            .args(words)
+            .output()
+            .expect("the binary runs");
+        assert_eq!(output.status.code(), Some(1), "{words:?}");
+        assert!(output.stdout.is_empty(), "{words:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            "There is no data folder on this system; nothing can be recorded from the command line.\n",
+            "{words:?}"
+        );
+    }
 }
 
 /// A folder that only the sandbox may name, so a mistake in the test cannot reach the person's

@@ -16,7 +16,7 @@ fn every_language_reads_whole_at_forty_columns() {
     let shown = std::env::var("QFOCUS_TOUR").ok();
     for &(file, _) in crate::locales() {
         let code = file.trim_end_matches(".toml");
-        tour(code, code, &mut |name, h| {
+        tour(code, code, Look::NARROW, &mut |name, h| {
             let screen = h.screen();
             if shown.as_deref() == Some(code) {
                 println!("=== {code} · {name}\n{screen}");

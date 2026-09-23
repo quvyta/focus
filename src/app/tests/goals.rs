@@ -168,6 +168,10 @@ fn t_starts_a_countdown_that_counts_down_says_when_it_is_up_and_goes_on() {
     h.advance(Duration::from_secs(1));
     assert!(h.screen().contains("target 1 min 30 s · 2 min"), "{}", h.screen());
     assert_eq!(forbidden(&h.screen()), None, "{}", h.screen());
+    // A terminal in ASCII glyphs has no `·`, so the line joins its parts with a plain dash.
+    h.set_glyph_mode(GlyphMode::Ascii);
+    assert!(h.screen().contains("target 1 min 30 s - 2 min"), "{}", h.screen());
+    h.set_glyph_mode(GlyphMode::Unicode);
     h.press("space");
     assert!(h.screen().contains("2 min recorded"), "{}", h.screen());
     drop(h);

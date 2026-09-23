@@ -11,6 +11,7 @@ pub mod timer;
 pub mod today;
 
 use qframe::date::{Date, Weekday};
+use qframe::icons::GlyphMode;
 use qframe::prelude::*;
 use qframe::widgets::{Gauge, Span};
 
@@ -19,6 +20,14 @@ use crate::prefs::Prefs;
 use crate::session::Session;
 use crate::stats;
 use crate::tree::{Goal, Tree as Catalog};
+
+/// `text` as the terminal's glyphs can draw it. qfocus's words use two marks outside ASCII of
+/// their own: `·` between the parts of a line and `—` for an amount that is not there. A terminal
+/// in ASCII glyphs can show neither, so there each becomes `-`, the way every icon falls back to
+/// ASCII in that mode; the letters of a language are its words and are left as they are.
+pub fn in_glyphs(text: String, mode: GlyphMode) -> String {
+    if mode == GlyphMode::Ascii && text.contains(['·', '—']) { text.replace(['·', '—'], "-") } else { text }
+}
 
 /// A warning above a screen: a mark and the words, so the meaning never rests on the colour
 /// alone. A long one wraps rather than being cut.

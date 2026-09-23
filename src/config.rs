@@ -18,7 +18,7 @@
 //! where it is and is shown on the Settings page. The records are not settings and do not move.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use qframe::diagnostics::Diagnostic;
 use qframe::i18n::I18n;
@@ -83,6 +83,30 @@ pub fn preferences_in(folder: &Path) -> Preferences {
     Family::QUVYTA.preferences_in(folder, APP, &spoken())
 }
 
+/// Where the family's update notice is kept and where qfocus remembers when it last asked
+/// whether a newer version of itself is out.
+///
+/// The switch is the family's, one for every Quvyta application, so it is read from the shared
+/// `quvyta.conf` rather than from `focus.conf`. A test gives folders of its own, so nothing it
+/// does reads or turns off the person's own switch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateFolders {
+    /// The family's configuration folder, whose shared file holds the switch.
+    pub config: PathBuf,
+    /// qfocus's state folder, which remembers when the question was last asked.
+    pub state: PathBuf,
+}
+
+impl UpdateFolders {
+    /// This machine's folders, or `None` without a home folder, where nothing could remember the
+    /// switch or the last question and so nothing is asked.
+    #[must_use]
+    pub fn here() -> Option<Self> {
+        let family = Family::QUVYTA;
+        family.config_dir().zip(family.state_dir(APP)).map(|(config, state)| Self { config, state })
+    }
+}
+
 /// The languages qfocus speaks, for choosing the machine's one before the runtime is built: a
 /// language the application does not carry is no use to it.
 #[must_use]
@@ -116,8 +140,6 @@ fn checked(settings: Settings) -> Settings {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use qframe::date::Weekday;
 
     use super::*;

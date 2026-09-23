@@ -400,6 +400,7 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
                 } else {
                     t!("timer.countdown", amount = amount)
                 };
+                let line = super::in_glyphs(line, ui.env().icons().mode());
                 ui.add(Text::new(line).role(tone).no_wrap());
             }
             for goal in goals {
@@ -442,6 +443,7 @@ fn goal_line<M: 'static>(goal: &GoalRow, units: &Units<'_>, quiet: bool, ui: &mu
     } else {
         t!("timer.goal-line", done = short(goal.done, units), amount = amount)
     };
+    let text = super::in_glyphs(text, ui.env().icons().mode());
     let pillar = ui.env().icons().glyph("pillar").into_owned();
     let line = Text::rich([Span::new(format!("{pillar} ")).color("accent"), Span::new(text)]).no_wrap();
     ui.add(if quiet { line.role("faint") } else { line });

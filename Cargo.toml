@@ -6,7 +6,7 @@ homepage = "https://quvyta.com/qfocus/"
 readme = "README.md"
 keywords = ["tui", "terminal", "focus", "time-tracking", "productivity"]
 categories = ["command-line-utilities"]
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
@@ -29,7 +29,7 @@ name = "qfocus"
 path = "src/lib.rs"
 
 [dependencies]
-quvyta-framework = "0.1.18"
+quvyta-framework = { version = "0.1.18", features = ["updates"] }
 toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "display", "preserve_order"] }
 
 [lints.rust]

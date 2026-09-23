@@ -149,6 +149,9 @@ pub struct Settings {
     short: Option<(Timed, Duration)>,
     /// The day the older records are deleted before, once chosen; until then a year before today.
     older: Option<Date>,
+    /// Whether the family's update notice is offered, right after the appearance section: only
+    /// where qfocus asks for its updates, so the page offers no switch that would do nothing.
+    updates: bool,
 }
 
 impl Settings {
@@ -163,7 +166,16 @@ impl Settings {
             failure: None,
             short: None,
             older: None,
+            updates: false,
         }
+    }
+
+    /// The same screen offering the family's update notice (`true`) right after the appearance
+    /// section, or not.
+    #[must_use]
+    pub fn with_updates(mut self, offered: bool) -> Self {
+        self.updates = offered;
+        self
     }
 
     /// The screen that also says which `files` from an earlier version's settings folder were
@@ -282,6 +294,10 @@ pub fn view<M: From<Msg> + Clone + Send + 'static>(
                 // every Quvyta application shows the same rows, and each shared row carries the
                 // choice of changing it everywhere or here only.
                 appearance.section(list, |change| M::from(Msg::Appearance(change)));
+                // The family's own switch and words, the same in every application that asks.
+                if screen.updates {
+                    appearance.updates(list, |change| M::from(Msg::Appearance(change)));
+                }
 
                 list.heading(t!("settings.time"));
                 time_rows(list, screen, prefs, week_start, units);

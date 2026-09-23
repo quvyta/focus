@@ -10,6 +10,11 @@
 //! the same floors: the day the week starts on, the hour the day turns at, when silence counts
 //! as being away, and the ceiling a session is flagged over. On Finish the framework writes the
 //! shared keys and makes `focus.conf`; the four go into that same file straight after.
+//!
+//! Where qfocus asks for its updates, the same step ends with the family's update notice, the
+//! switch of the one thing qfocus does over the network, so it can be turned off before it is
+//! ever done. It is held like the rest and written on Finish only when it differs from what the
+//! family's file says; nothing is asked while the wizard is open.
 
 use qframe::prelude::*;
 use qframe::storage::Family;
@@ -42,6 +47,8 @@ impl QFocus {
     /// screen opens.
     pub(super) fn finish_setup(&mut self) -> Command<Msg> {
         let Some(setup) = self.setup.take() else { return Command::none() };
+        // The update notice as the last step left it, held until now.
+        let held = self.appearance.preferences().update_notice();
         // The appearance rows of the Settings page start from what the wizard chose; the wizard's
         // own Appearance held those values without writing them.
         let appearance = Appearance::new(Family::QUVYTA, crate::config::APP, setup.preferences().clone());
@@ -53,7 +60,8 @@ impl QFocus {
         // with the defaults gets a file that holds the shared keys and nothing else.
         self.prefs.write(&mut self.settings);
         self.refresh_day();
-        Command::batch([self.save_settings(), Command::focus(today::TREE)])
+        let kept = self.keep_held_update_notice(held);
+        Command::batch([self.save_settings(), Command::focus(today::TREE), kept, self.ask_for_update()])
     }
 
     /// The wizard, while it is wanted: the framework's appearance step, then qfocus's own.
@@ -85,6 +93,11 @@ impl QFocus {
         ui.add_with(ScrollView::new(), |ui| {
             SettingsList::show(ui, |list| {
                 settings::time_rows(list, &self.settings_screen, &self.prefs, week_start, &units.as_units());
+                // The family's update notice, where qfocus asks for its updates: the one thing
+                // qfocus would do over the network, offered before it is ever done.
+                if self.updates.is_some() {
+                    self.appearance.updates(list, |change| Msg::Settings(settings::Msg::Appearance(change)));
+                }
             })
             .fill_width()
             .id(DAY_LIST);

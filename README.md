@@ -158,6 +158,24 @@ piece or not at all, and a damaged line is reported and skipped rather than stop
 The folder can be shared between machines with a file synchroniser: each machine keeps its own
 running counter.
 
+## No telemetry, and what goes over the network
+
+qfocus collects no statistics and sends nothing about you, your machine, your focuses or your records anywhere.
+
+It asks one question of its own accord: whether a newer qfocus is out. When qfocus opens, at most once a day, it reads the list of published versions of `quvyta-focus` from crates.io, the same file `cargo install` reads: one HTTPS `GET` of `https://index.crates.io/qu/vy/quvyta-focus`. The request carries no cookie and no identifier; its headers are `User-Agent: quvyta-focus/<the version you run>` and `Accept: */*`. crates.io sees, as with any connection, the address it comes from. The question is asked in the background, so qfocus never waits for it to open. When a newer version is out, a notice in the corner says which one and how to update. When there is no network, or crates.io does not answer within ten seconds, nothing is said and the next day asks again. The first start asks nothing until you have finished its questions.
+
+The time of the last question is kept in a file named `update-check`:
+
+| System | File |
+|---|---|
+| Linux and other Unix systems | `$XDG_STATE_HOME/quvyta/focus/update-check`, or `~/.local/state/quvyta/focus/update-check` |
+| macOS | `~/Library/Application Support/Quvyta/focus/update-check` |
+| Windows | `%LOCALAPPDATA%\Quvyta\focus\update-check` |
+
+To turn it off, switch off **Say when an update is out** in **Settings**, right under the appearance, or on the last page of the first start. The switch belongs to the whole Quvyta family: it is `update-notice = false` in the shared `quvyta.conf` beside `focus.conf`, and turning it off stops the question in every Quvyta application. While it is off, qfocus asks nothing at all.
+
+Apart from that question, qfocus connects to nothing.
+
 ## Building from source
 
 The toolchain is pinned by `rust-toolchain.toml`.

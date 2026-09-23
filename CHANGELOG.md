@@ -2,6 +2,17 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.11 - 2026-09-23
+
+### Added
+
+- qfocus says when a newer version is out. When it opens, at most once a day and without waiting for the answer, it asks crates.io for the newest version of `quvyta-focus`; only the package's name and the version you run go out. A newer one is said in the corner with how to update, and no network is silence. It is on unless you turn it off: **Say when an update is out** in Settings, and on the last page of the first start, is the one switch for the whole Quvyta family. The README says exactly what is sent.
+
+### Fixed
+
+- In ASCII glyph mode the dot between the parts of a line and the dash of an empty row are a plain `-`, so a terminal without Unicode shows no character it cannot draw.
+- The German export button reads "Exportieren", a verb like the buttons beside it.
+
 ## 0.1.10 - 2026-09-23
 
 ### Added

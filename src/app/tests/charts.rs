@@ -208,11 +208,11 @@ fn ascii_and_turkish_charts_keep_clean() {
     assert_eq!(forbidden(&screen), None, "{screen}");
     assert!(h.is_focused(charts::CHART), "the keys follow the scale:\n{screen}");
     h.press("right");
-    assert!(h.screen().contains("Pazartesi · 30 dk · Life 30 dk"), "{}", h.screen());
+    assert!(h.screen().contains("Pazartesi - 30 dk - Life 30 dk"), "{}", h.screen());
     // "Ay" is also the start of the Ayarlar tab, so the scale is chosen by message.
     h.send(Msg::Charts(charts::Msg::Scale(charts::Scale::Month.index())));
     let screen = h.screen();
-    assert!(screen.contains("6 oturum · ortalama 52 dk 30 sn"), "{screen}");
+    assert!(screen.contains("6 oturum - ortalama 52 dk 30 sn"), "{screen}");
     assert_eq!(forbidden(&screen), None, "{screen}");
     h.click_text("Yıl");
     let screen = h.screen();
