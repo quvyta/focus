@@ -2,6 +2,16 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.14 - 2026-09-24
+
+### Fixed
+
+- Behind the quit dialog the category names of the day strip's legend stay faint but readable. "Work" was drawn in the colour of the ground itself and could not be seen at all.
+
+### Changed
+
+- Built on quvyta-framework 0.1.22.
+
 ## 0.1.13 - 2026-09-23
 
 ### Fixed

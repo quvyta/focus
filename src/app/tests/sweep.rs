@@ -55,17 +55,8 @@ struct Exception {
 }
 
 /// Findings that are known. A defect found here is a framework component's and is filed with the
-/// framework rather than worked around.
+/// framework rather than worked around; today only limits are left.
 const EXCEPTIONS: &[Exception] = &[
-    // Defect: behind the quit dialog the timeline legend's label is drawn in the ground's own
-    // colour, so it is gone in true colour as well as in sixteen.
-    Exception {
-        screen: "quit dialog",
-        check: check::CONTRAST,
-        detail: "`W` at 4,5 keeps only 1.00:1",
-        kind: Kind::Defect,
-        reason: "the framework draws the legend label behind a dialog in the canvas colour itself (12,12,14 on 12,12,14); filed as request 39",
-    },
     // Limits: the glyphs are what the step shows.
     Exception {
         screen: "wizard, appearance",
@@ -85,7 +76,7 @@ const EXCEPTIONS: &[Exception] = &[
 
 /// How many exceptions the list is allowed to hold. Adding one means changing this number, which
 /// makes it a decision rather than an accident.
-const EXCEPTION_COUNT: usize = 3;
+const EXCEPTION_COUNT: usize = 2;
 
 /// One missed promise.
 struct Finding {
