@@ -5,7 +5,7 @@
 
 **Start a counter on what you are working on, and see where your time went in day, week, month and year charts, all from the terminal.**
 
-![qfocus in use: a focus is started from the Today page, the counter runs and takes a break, the session is stopped into a record, then the day and week charts and one record's work and breaks are shown](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/qfocus.gif)
+![qfocus in use: a focus's goal and countdown are opened on the Today page, the counter runs with a note and a break, the session is stopped into a record, the day, week and month charts and one record's spans are shown, and Settings is visited before returning to Today](https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/qfocus.gif)
 
 <p>
   <img src="https://raw.githubusercontent.com/quvyta/focus/main/docs/screenshots/week.png" alt="The week in bars stacked by category, one day picked" width="49%">
@@ -45,7 +45,9 @@ and year charts. It is part of the Quvyta ecosystem of terminal applications, is
   interface.
 
 The interface follows your system language (nine are included, see [Languages](#languages)) and
-uses the themes, icons, keys and mouse behaviour every Quvyta application shares.
+uses the themes, icons, keys and mouse behaviour every Quvyta application shares. When another Quvyta
+application changes the shared language, theme or icons, a running qfocus takes the change at
+once.
 
 ## Install
 

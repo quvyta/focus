@@ -17,7 +17,7 @@
 //! shared file says; nothing is asked while the wizard is open.
 
 use qframe::prelude::*;
-use qframe::storage::Family;
+use qframe::storage::Ecosystem;
 use qframe::widgets::{Appearance, ScrollView, SettingsList, Setup, SetupWizard};
 
 use super::{Msg, QFocus, today, units};
@@ -51,7 +51,7 @@ impl QFocus {
         let held = self.appearance.preferences().update_notice();
         // The appearance rows of the Settings page start from what the wizard chose; the wizard's
         // own Appearance held those values without writing them.
-        let appearance = Appearance::new(Family::QUVYTA, crate::config::APP, setup.preferences().clone());
+        let appearance = Appearance::new(Ecosystem::QUVYTA, crate::config::APP, setup.preferences().clone());
         self.appearance = match &self.config_folder {
             Some(folder) => appearance.in_folder(folder),
             None => appearance,

@@ -9,7 +9,7 @@ use qframe::date::TimeOfDay;
 fn app_on_file(dir: &Path, clock: &FakeClock) -> (QFocus, PathBuf) {
     let path = dir.join("focus.conf");
     fs::create_dir_all(dir).expect("folder");
-    let settings = Settings::open(&path).member_of(&Family::QUVYTA).schema(Prefs::schema()).self_heal(true);
+    let settings = Settings::open(&path).member_of(&Ecosystem::QUVYTA).schema(Prefs::schema()).self_heal(true);
     (QFocus::new(Store::open(Paths::at(dir, "test")), true, Some(180), clock.reader(), settings, appearance(dir)), path)
 }
 
@@ -684,6 +684,114 @@ fn emptying_the_trash_keeps_the_archived_focus_a_counter_left_behind_still_runs_
     let saved = fs::read_to_string(h.app().store().paths.tree_file()).expect("tree");
     assert!(saved.contains("Review"), "and in the file it was written to:\n{saved}");
     assert!(h.app().timer().is_some(), "the counter itself is untouched:\n{screen}");
+    done(&dir);
+}
+
+/// Walks down the settings list until the row labelled `label` has the keyboard, as a person does.
+fn down_to_setting(h: &mut Harness<QFocus>, label: &str) {
+    for _ in 0..20 {
+        if h.screen().lines().any(|line| line.trim_start().starts_with('▌') && line.contains(label)) {
+            return;
+        }
+        h.press("down");
+    }
+    panic!("Down never reaches the `{label}` row:\n{}", h.screen());
+}
+
+#[test]
+fn the_day_turns_at_a_time_typed_from_the_keyboard_and_the_file_follows() {
+    let dir = temp("settings-typed-rollover");
+    seeded(&dir);
+    let clock = FakeClock::new();
+    let (app, path) = app_on_file(&dir, &clock);
+    let mut h = harness(app, 80, 40);
+    h.press("4");
+    down_to_setting(&mut h, "Day turns at");
+    h.type_text("0530");
+    h.press("down");
+    assert_eq!(h.app().prefs().rollover, TimeOfDay::new(5, 30, 0), "{}", h.screen());
+    let written = fs::read_to_string(&path).expect("settings written");
+    assert!(written.contains("day-rollover = \"05:30\""), "{written}");
+    let screen = h.screen();
+    let row = screen.lines().find(|line| line.contains("Day turns at")).unwrap_or_default();
+    assert!(row.contains("05") && row.contains("30"), "the row shows the typed time:\n{screen}");
+    done(&dir);
+}
+
+#[test]
+fn away_after_keeps_a_typed_length_and_refuses_one_under_the_floor() {
+    let dir = temp("settings-typed-away");
+    seeded(&dir);
+    let clock = FakeClock::new();
+    let (app, path) = app_on_file(&dir, &clock);
+    let mut h = harness(app, 80, 40);
+    h.press("4");
+    down_to_setting(&mut h, "Away after");
+    h.press("right").type_text("07");
+    h.press("down");
+    assert_eq!(h.app().prefs().idle_after, Duration::from_secs(7 * 60), "{}", h.screen());
+    let written = fs::read_to_string(&path).expect("settings written");
+    assert!(written.contains("idle-after = 420"), "{written}");
+    let screen = h.screen();
+    let row = screen.lines().find(|line| line.contains("Away after")).unwrap_or_default();
+    assert!(row.contains("0 h 07 min"), "the row shows the typed length:\n{screen}");
+
+    h.press("up").type_text("0000");
+    h.press("down");
+    assert_eq!(h.app().prefs().idle_after, Duration::from_secs(7 * 60), "a value under the floor is not applied");
+    let written = fs::read_to_string(&path).expect("settings written");
+    assert!(written.contains("idle-after = 420"), "{written}");
+    let screen = h.screen();
+    assert!(screen.contains("At least 1 min"), "the row says why it refused the length:\n{screen}");
+    let row = screen.lines().find(|line| line.contains("Away after")).unwrap_or_default();
+    assert!(row.contains("0 h 00 min"), "the refused length stays in the field:\n{screen}");
+    done(&dir);
+}
+
+#[test]
+fn the_session_ceiling_keeps_a_length_typed_from_the_keyboard() {
+    let dir = temp("settings-typed-ceiling");
+    seeded(&dir);
+    let clock = FakeClock::new();
+    let (app, path) = app_on_file(&dir, &clock);
+    let mut h = harness(app, 80, 40);
+    h.press("4");
+    down_to_setting(&mut h, "Session ceiling");
+    h.type_text("0230");
+    h.press("down");
+    assert_eq!(h.app().prefs().ceiling, 2 * 3_600 + 30 * 60, "{}", h.screen());
+    let written = fs::read_to_string(&path).expect("settings written");
+    assert!(written.contains("ceiling = 9000"), "{written}");
+    let screen = h.screen();
+    let row = screen.lines().find(|line| line.contains("Session ceiling")).unwrap_or_default();
+    assert!(row.contains("2 h 30 min"), "the row shows the typed length:\n{screen}");
+    done(&dir);
+}
+
+#[test]
+fn a_suggested_goal_typed_on_its_row_is_what_the_goal_field_starts_from() {
+    let dir = temp("settings-typed-suggested-goal");
+    let (_, focus) = seeded(&dir);
+    let clock = FakeClock::new();
+    let (app, path) = app_on_file(&dir, &clock);
+    let mut h = harness(app, 80, 40);
+    h.press("4");
+    down_to_setting(&mut h, "Suggested goal");
+    h.type_text("0145");
+    h.press("tab");
+    assert_eq!(h.app().prefs().default_goal, 6_300, "{}", h.screen());
+    let written = fs::read_to_string(&path).expect("settings written");
+    assert!(written.contains("default-goal = 6300"), "{written}");
+    let screen = h.screen();
+    let row = screen.lines().find(|line| line.contains("Suggested goal")).unwrap_or_default();
+    assert!(row.contains("1 h 45 min"), "the row shows the typed length:\n{screen}");
+
+    h.press("1");
+    tab_to(&mut h, today::TREE);
+    walk_to(&mut h, Row::Focus(focus));
+    h.press("g");
+    assert!(h.app().today().goal_edit().is_some_and(|edit| edit.amount == 6_300), "{}", h.screen());
+    assert!(h.screen().contains("1 h 45 min"), "{}", h.screen());
     done(&dir);
 }
 

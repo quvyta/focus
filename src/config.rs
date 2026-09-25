@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 use qframe::diagnostics::Diagnostic;
 use qframe::i18n::I18n;
-use qframe::storage::{Family, Preferences, Settings, config_dir};
+use qframe::storage::{Ecosystem, Preferences, Settings, config_dir};
 
 use crate::prefs::Prefs;
 
@@ -52,12 +52,12 @@ pub struct Loaded {
 /// folder the settings stay in memory and say why.
 #[must_use]
 pub fn load() -> Loaded {
-    match Family::QUVYTA.config_dir() {
+    match Ecosystem::QUVYTA.config_dir() {
         Some(folder) => {
             let legacy = config_dir(LEGACY).unwrap_or_else(|| folder.join(APP));
             load_in(&folder, &legacy)
         }
-        None => Loaded { settings: checked(Settings::load_member(&Family::QUVYTA, APP)), left_behind: Vec::new() },
+        None => Loaded { settings: checked(Settings::load_member(&Ecosystem::QUVYTA, APP)), left_behind: Vec::new() },
     }
 }
 
@@ -73,14 +73,14 @@ pub fn load_in(folder: &Path, legacy: &Path) -> Loaded {
 /// shared one, else what this machine asks for.
 #[must_use]
 pub fn preferences() -> Preferences {
-    Family::QUVYTA.preferences(APP, &spoken())
+    Ecosystem::QUVYTA.preferences(APP, &spoken())
 }
 
 /// [`preferences`] with `folder` as the shared Quvyta folder, so a test never touches the user's own
 /// settings.
 #[must_use]
 pub fn preferences_in(folder: &Path) -> Preferences {
-    Family::QUVYTA.preferences_in(folder, APP, &spoken())
+    Ecosystem::QUVYTA.preferences_in(folder, APP, &spoken())
 }
 
 /// Where the Quvyta-wide update notice is kept and where qfocus remembers when it last asked
@@ -102,7 +102,7 @@ impl UpdateFolders {
     /// switch or the last question and so nothing is asked.
     #[must_use]
     pub fn here() -> Option<Self> {
-        let quvyta = Family::QUVYTA;
+        let quvyta = Ecosystem::QUVYTA;
         quvyta.config_dir().zip(quvyta.state_dir(APP)).map(|(config, state)| Self { config, state })
     }
 }
@@ -128,14 +128,14 @@ fn adopt(folder: &Path, legacy: &Path) -> Vec<Diagnostic> {
     if fs::symlink_metadata(legacy.join(LEGACY_FILE)).is_err() {
         return Vec::new();
     }
-    Family::QUVYTA.adopt_in(folder, APP, legacy).diagnostics().to_vec()
+    Ecosystem::QUVYTA.adopt_in(folder, APP, legacy).diagnostics().to_vec()
 }
 
 /// `settings` checked against qfocus's keys and healed. Being a member of the ecosystem makes
 /// `"quvyta"` a valid value of the shared keys, so healing does not throw away a file that says
 /// qfocus follows the ecosystem.
 fn checked(settings: Settings) -> Settings {
-    settings.member_of(&Family::QUVYTA).schema(Prefs::schema()).self_heal(true)
+    settings.member_of(&Ecosystem::QUVYTA).schema(Prefs::schema()).self_heal(true)
 }
 
 #[cfg(test)]

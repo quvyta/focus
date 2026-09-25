@@ -30,7 +30,7 @@ pub(super) fn start_asking(
     let fonts = root.join("fonts");
     let i18n = crate::config::spoken();
     // No real font folder is looked at, and nothing would be installed or registered.
-    let setup = Setup::new_in(&config, Family::QUVYTA, crate::config::APP, &i18n, Msg::Setup)
+    let setup = Setup::new_in(&config, Ecosystem::QUVYTA, crate::config::APP, &i18n, Msg::Setup)
         .on_finish(Msg::SetUp)
         .install(Install::new().target(fonts.join("QuvytaNerdFont")).register(false))
         .font_dirs(vec![fonts]);
@@ -41,9 +41,9 @@ pub(super) fn start_asking(
         Some(setup) => setup.preferences().clone(),
         None => crate::config::preferences_in(&config),
     };
-    let appearance = Appearance::new(Family::QUVYTA, crate::config::APP, preferences).in_folder(&config);
+    let appearance = Appearance::new(Ecosystem::QUVYTA, crate::config::APP, preferences).in_folder(&config);
     let settings =
-        Settings::open(config.join("focus.conf")).member_of(&Family::QUVYTA).schema(Prefs::schema()).self_heal(true);
+        Settings::open(config.join("focus.conf")).member_of(&Ecosystem::QUVYTA).schema(Prefs::schema()).self_heal(true);
     let store = Store::open(Paths::at(root.join("data"), "test"));
     let mut app = QFocus::new(store, true, Some(180), clock.reader(), settings, appearance);
     if let Some(setup) = setup {
@@ -65,7 +65,7 @@ fn names(root: &Path) -> Vec<String> {
 fn written(root: &Path) -> Settings {
     let path = root.join("config").join("focus.conf");
     let text = fs::read_to_string(&path).expect("focus.conf is written");
-    Settings::parse_str("focus.conf", &text).member_of(&Family::QUVYTA).schema(Prefs::schema())
+    Settings::parse_str("focus.conf", &text).member_of(&Ecosystem::QUVYTA).schema(Prefs::schema())
 }
 
 /// Chooses the Nordic theme on the appearance step, with the pointer.

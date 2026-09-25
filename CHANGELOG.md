@@ -2,6 +2,13 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.16 - 2026-09-25
+
+### Changed
+
+- qfocus follows the ecosystem while it runs: when another Quvyta application changes the shared language, theme, icons or reduced motion, the open screen changes at once, and Settings shows the new values. A choice qfocus keeps for itself stays in force. If `focus.conf` is changed to follow the ecosystem while qfocus is open, the next appearance choice in Settings is saved for the whole ecosystem.
+- The moving picture in the README shows a focus's goal and countdown, a note, the month chart and Settings.
+
 ## 0.1.15 - 2026-09-25
 
 ### Changed

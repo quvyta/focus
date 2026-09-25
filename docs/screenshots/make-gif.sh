@@ -1,11 +1,12 @@
 #!/bin/sh
 # Draws the README's moving picture again: qfocus.gif and qfocus.mp4 in this folder.
 #
-# The picture picks a focus on the Today page, starts the counter, takes a break, stops it into a
-# record, then walks the day and week charts and opens one session's spans on the Records page.
-# The ignored `readme_gif` test in tests/readme_shots.rs records it with real key presses and a
-# hand-moved clock over a made-up week in a temporary folder, so the picture shows no one's data
-# and is the same on every machine, then encodes it with ffmpeg. Needs ffmpeg with libx264.
+# The picture picks a focus on the Today page, opens its goal and countdown, runs the counter with
+# a note and a break, stops it into a record, then walks the day, week and month charts, opens one
+# session's spans on the Records page and visits Settings before returning to Today. The ignored
+# `readme_gif` test in tests/readme_shots.rs records it with real key presses and a hand-moved clock
+# over a made-up week in a temporary folder, so the picture shows no one's data and is the same on
+# every machine, then encodes it with ffmpeg. Needs ffmpeg with libx264.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)

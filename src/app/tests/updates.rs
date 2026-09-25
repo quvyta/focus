@@ -28,8 +28,8 @@ fn folders(root: &Path) -> UpdateFolders {
 /// over `updates`, as a person starts it once the wizard is behind them.
 fn started(root: &Path, clock: &FakeClock, updates: Option<UpdateFolders>) -> Harness<QFocus> {
     let config = root.join("config");
-    let appearance =
-        Appearance::new(Family::QUVYTA, crate::config::APP, crate::config::preferences_in(&config)).in_folder(&config);
+    let appearance = Appearance::new(Ecosystem::QUVYTA, crate::config::APP, crate::config::preferences_in(&config))
+        .in_folder(&config);
     let store = Store::open(Paths::at(root.join("data"), "test"));
     let app = QFocus::new(store, true, Some(180), clock.reader(), Settings::in_memory(), appearance);
     harness(app.update_notice(updates), 80, 60)
@@ -89,7 +89,7 @@ fn the_switch_on_the_settings_page_turns_the_question_off_for_the_ecosystem_and_
     assert!(row < time, "and before qfocus's own rows:\n{screen}");
 
     click_switch(&mut h);
-    assert!(!Family::QUVYTA.update_notice_in(&root.join("config")), "the shared file says off:\n{}", h.screen());
+    assert!(!Ecosystem::QUVYTA.update_notice_in(&root.join("config")), "the shared file says off:\n{}", h.screen());
     assert_eq!(written_switch(&root).as_deref(), Some("update-notice = false"));
 
     let mut off = started(&root, &clock, Some(folders(&root)));
@@ -99,7 +99,7 @@ fn the_switch_on_the_settings_page_turns_the_question_off_for_the_ecosystem_and_
 
     off.press("4");
     click_switch(&mut off);
-    assert!(Family::QUVYTA.update_notice_in(&root.join("config")), "turned back on:\n{}", off.screen());
+    assert!(Ecosystem::QUVYTA.update_notice_in(&root.join("config")), "turned back on:\n{}", off.screen());
     let on = started(&root, &clock, Some(folders(&root)));
     assert_eq!(on.update_checks().len(), 1, "and the next start asks again");
     done(&root);

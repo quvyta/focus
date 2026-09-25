@@ -11,7 +11,7 @@
 
 use qframe::prelude::*;
 use qframe::runtime::UpdateCheck;
-use qframe::storage::Family;
+use qframe::storage::Ecosystem;
 use qframe::widgets::AppearanceChange;
 
 use super::{Msg, QFocus};
@@ -35,12 +35,17 @@ impl QFocus {
     /// it is turned off anywhere in the ecosystem nothing is asked at all, whoever runs the question.
     pub(super) fn ask_for_update(&self) -> Command<Msg> {
         let Some(folders) = &self.updates else { return Command::none() };
-        if self.setting_up() || !Family::QUVYTA.update_notice_in(&folders.config) {
+        if self.setting_up() || !Ecosystem::QUVYTA.update_notice_in(&folders.config) {
             return Command::none();
         }
-        let check =
-            UpdateCheck::new(Family::QUVYTA, APP, env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), Msg::NewVersion)
-                .in_folders(folders.config.clone(), folders.state.clone());
+        let check = UpdateCheck::new(
+            Ecosystem::QUVYTA,
+            APP,
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            Msg::NewVersion,
+        )
+        .in_folders(folders.config.clone(), folders.state.clone());
         Command::check_for_update(check)
     }
 

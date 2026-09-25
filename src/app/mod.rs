@@ -12,7 +12,7 @@ use std::time::Duration;
 use qframe::date::{Date, DateTime, Weekday, local_offset};
 use qframe::prelude::*;
 use qframe::runtime::{Confirm, Task, TaskId, Termination, Update};
-use qframe::storage::{Family, Settings, atomic_write};
+use qframe::storage::{Ecosystem, Preferences, Settings, atomic_write};
 use qframe::uptime::Uptime;
 use qframe::widgets::{Appearance, Bar, BarChart, BigText, Modal, Setup, SetupMsg, Span, Toast};
 
@@ -88,9 +88,10 @@ pub fn run() -> io::Result<()> {
     // the shared preferences the usual way would make `quvyta.conf`, so they come from the
     // wizard, which resolves them without touching a file.
     let i18n = crate::config::spoken();
-    let setup = Family::QUVYTA
-        .config_dir()
-        .map(|_| Setup::new(Family::QUVYTA, crate::config::APP, &i18n, Msg::Setup).on_finish(Msg::SetUp))
+    let folder = Ecosystem::QUVYTA.config_dir();
+    let setup = folder
+        .as_ref()
+        .map(|_| Setup::new(Ecosystem::QUVYTA, crate::config::APP, &i18n, Msg::Setup).on_finish(Msg::SetUp))
         .filter(Setup::needed);
     // The shared look is resolved before the first frame, so the shared language and theme are
     // in force from the start; the rows on the Settings page write it back.
@@ -98,7 +99,7 @@ pub fn run() -> io::Result<()> {
         Some(setup) => setup.preferences().clone(),
         None => crate::config::preferences(),
     };
-    let appearance = Appearance::new(Family::QUVYTA, crate::config::APP, preferences.clone());
+    let appearance = Appearance::new(Ecosystem::QUVYTA, crate::config::APP, preferences.clone());
     let mut app = QFocus::new(store, on_disk, local_offset(), Box::new(clock::now), settings.clone(), appearance)
         .with_left_behind(left_behind);
     if let Some(setup) = setup {
@@ -110,6 +111,12 @@ pub fn run() -> io::Result<()> {
     for &(file, text) in crate::locales() {
         runtime = runtime.locale_source(file, text);
     }
+    // The settings and preferences above stay as they were read; the member follow only reads the
+    // two files again when another Quvyta application changes them.
+    let runtime = match folder {
+        Some(folder) => runtime.member_in(Ecosystem::QUVYTA, folder, crate::config::APP),
+        None => runtime,
+    };
     runtime.run()
 }
 
@@ -220,6 +227,9 @@ pub enum Msg {
     /// The wizard wrote the shared keys and made the settings file; qfocus writes its own
     /// settings into it.
     SetUp,
+    /// Another Quvyta application changed the shared language, theme, icons or reduced motion;
+    /// the Settings page takes the values now in force.
+    Preferences(Preferences),
     /// A newer version of qfocus is out.
     NewVersion(Update),
 }
@@ -808,6 +818,10 @@ impl App for QFocus {
         })
     }
 
+    fn preferences(&self, preferences: &Preferences) -> Option<Msg> {
+        Some(Msg::Preferences(preferences.clone()))
+    }
+
     fn update(&mut self, msg: Msg) -> Command<Msg> {
         self.apply(msg)
     }
@@ -894,6 +908,7 @@ impl QFocus {
                     | Msg::Idle(_)
                     | Msg::Quiet(_)
                     | Msg::Minute
+                    | Msg::Preferences(_)
             )
         {
             return Command::none();
@@ -969,6 +984,10 @@ impl QFocus {
                 None => Command::none(),
             },
             Msg::SetUp => self.finish_setup(),
+            Msg::Preferences(preferences) => {
+                self.appearance.refresh(preferences);
+                Command::none()
+            }
             Msg::NewVersion(update) => Command::toast(update.toast()),
         }
     }
