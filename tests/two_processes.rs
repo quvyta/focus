@@ -276,8 +276,13 @@ impl Window {
     /// Kills the program outright, as a power cut or an `OOM` killer would, and waits until the
     /// lock is free again: the kernel drops it when the process dies.
     fn kill(mut self, sandbox: &Sandbox) {
-        let killed =
-            sandbox.command("kill").args(["-KILL", &self.pid.to_string()]).status().expect("the kill command runs");
+        // The shell's own `kill`, which POSIX requires of every `sh`: a standalone `kill` program
+        // is part of procps and is missing from slim containers.
+        let killed = sandbox
+            .command("sh")
+            .args(["-c", r#"kill -KILL "$1""#, "sh", &self.pid.to_string()])
+            .status()
+            .expect("the shell runs");
         assert!(killed.success(), "the window could not be killed");
         self.terminal.wait().expect("the terminal ends with the program");
         let lock = sandbox.paths.lock_file();

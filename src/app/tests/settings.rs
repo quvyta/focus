@@ -28,7 +28,7 @@ fn the_settings_tab_opens_with_4_and_lists_every_setting_clean_in_both_languages
     let dir = temp("settings-page");
     seeded(&dir);
     let clock = FakeClock::new();
-    let mut h = harness(app_at(&dir, &clock), 80, 40);
+    let mut h = harness(app_at(&dir, &clock), 80, 44);
     h.press("4");
     assert_eq!(h.app().page(), Page::Settings);
     let screen = h.screen();
@@ -75,7 +75,7 @@ fn old_settings_files_left_behind_are_reported_on_the_settings_page_until_read()
         None,
         "/cfg/quvyta/focus/settings.toml: /cfg/quvyta/focus.conf already exists; this file stays and nothing is merged",
     );
-    let mut h = harness(app_at(&dir, &clock).with_left_behind(vec![file]), 100, 40);
+    let mut h = harness(app_at(&dir, &clock).with_left_behind(vec![file]), 100, 44);
     h.press("4");
     let screen = h.screen();
     assert!(screen.contains("Some old settings files stayed where they were"), "{screen}");
@@ -101,13 +101,20 @@ fn the_keys_walk_the_settings_and_a_switch_moves_with_space() {
     for _ in 0..6 {
         h.press("down");
     }
-    // The harness runs with reduced motion on, so the first press turns it off.
+    // The harness runs with reduced motion on, so the first press turns it off. Reduce motion
+    // is shared now: with its box checked the change goes to the ecosystem's file, not qfocus's.
+    let shared = dir.join("quvyta.conf");
     h.press("space");
-    assert_eq!(h.app().settings().reduced_motion(), Some(false));
     assert!(!h.env().reduced_motion());
+    let written = fs::read_to_string(&shared).expect("the shared file");
+    assert!(written.contains("reduced-motion = false"), "{written}");
     h.press("space");
-    assert_eq!(h.app().settings().reduced_motion(), Some(true));
-    for _ in 0..6 {
+    assert!(h.env().reduced_motion());
+    let written = fs::read_to_string(&shared).expect("the shared file");
+    assert!(written.contains("reduced-motion = true"), "{written}");
+    assert_eq!(h.app().settings().reduced_motion(), None, "qfocus's own file keeps no value of its own");
+    // The stop-at-goal switch is seven rows below, past reduce motion's own box.
+    for _ in 0..7 {
         h.press("down");
     }
     h.press("space");
@@ -357,7 +364,7 @@ fn holding_delete_empties_the_lists_too_and_ctrl_z_brings_everything_back() {
     let (rust, reading, review) = seeded_two(&dir);
     two_sessions(&dir, rust);
     let clock = FakeClock::new();
-    let mut h = harness(app_at(&dir, &clock), 80, 40);
+    let mut h = harness(app_at(&dir, &clock), 80, 44);
     h.press("4");
     hold(&mut h, "Delete everything");
     let screen = h.screen();

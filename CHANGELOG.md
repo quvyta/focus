@@ -2,6 +2,14 @@
 
 Every release of quvyta-focus, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/). While the version starts with 0, a minor release may change the files qfocus writes; the notes say so when it does, and qfocus moves older files forward by itself.
 
+## 0.1.15 - 2026-09-25
+
+### Changed
+
+- Reduce motion is shared like the language: in Settings it has its own "In every Quvyta application" box, and with the box checked the switch is saved in the ecosystem's `quvyta.conf`, so every Quvyta application follows it. qfocus's own file keeps `reduced-motion = "quvyta"` then. `QUVYTA_REDUCED_MOTION` still decides over both.
+- The first start leaves out the appearance step when another Quvyta application has already chosen a language, a theme and icons for the whole ecosystem, and opens on qfocus's own first step.
+- Built on quvyta-framework 0.1.29.
+
 ## 0.1.14 - 2026-09-24
 
 ### Fixed
